@@ -1,0 +1,40 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Contact Us - OpenAgents{% endblock %}
+
+{% block description %}Get in touch with the OpenAgents team{% endblock %}
+
+{% block content %}
+<div class="prose prose-invert max-w-none">
+    <h1 class="text-3xl font-bold mb-4">Contact Us</h1>
+    <p class="text-xl mb-8">Get in touch with our team for any inquiries or support.</p>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
+        <div>
+            <h2 class="text-2xl font-bold mb-4">Contact Information</h2>
+            <ul class="list-none p-0">
+                <li class="mb-4">
+                    <strong class="block">Email:</strong>
+                    <a href="mailto:hello@openagents.com" class="text-white hover:underline">hello@openagents.com</a>
+                </li>
+                <li class="mb-4">
+                    <strong class="block">Location:</strong>
+                    <span>San Francisco, CA</span>
+                </li>
+            </ul>
+        </div>
+        
+        <div>
+            <h2 class="text-2xl font-bold mb-4">Connect With Us</h2>
+            <ul class="list-none p-0">
+                <li class="mb-4">
+                    <a href="https://twitter.com/openagentsinc" class="text-white hover:underline">Twitter</a>
+                </li>
+                <li class="mb-4">
+                    <a href="https://github.com/openagentsinc" class="text-white hover:underline">GitHub</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
