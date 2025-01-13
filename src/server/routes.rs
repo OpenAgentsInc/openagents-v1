@@ -12,7 +12,7 @@ pub async fn index_page() -> impl Responder {
 
 #[get("/home")]
 pub async fn home_page() -> impl Responder {
-    let path: PathBuf = "./static/index.html".into();
+    let path: PathBuf = "./static/home.html".into();
     NamedFile::open(path)
 }
 
