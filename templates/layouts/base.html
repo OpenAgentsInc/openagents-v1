@@ -2,16 +2,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>{% block title %}OpenAgents{% endblock %}</title>
+    <title>@{ title }</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="{% block description %}Software to increase human agency.{% endblock %}">
+    <meta name="description" content="@{ description }">
     <meta name="application-name" content="OpenAgents"/>
     <meta name="author" content="OpenAgents, Inc.">
     <meta name="format-detection" content="telephone=no">
     <link rel="canonical" href="https://openagents.com"/>
     <link rel="stylesheet" href="/css/style.css"/>
     <script src="https://cdn.tailwindcss.com"></script>
-    {% block head %}{% endblock %}
+    @{ head | safe }
 </head>
 <body class="bg-black text-white font-mono max-w-[60rem] sm:border sm:border-white leading-6 mt-8 mb-8 py-2 px-4 pb-1 mx-auto">
     <div class="container mx-auto">
@@ -39,7 +39,7 @@
             </div>
         </header>
 
-        {% block content %}{% endblock %}
+        @{ content | safe }
     </div>
 </body>
 </html>
