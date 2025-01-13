@@ -19,6 +19,7 @@ actix-cors = "0.6"
 env_logger = "0.10"
 dotenv = "0.15"
 futures = "0.3"
+hypertext = { version = "0.6.2", features = ["actix"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde-aux = "4"
