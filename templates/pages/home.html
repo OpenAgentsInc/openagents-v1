@@ -1,35 +1,70 @@
-{% extends "layouts/base.html" %}
-
-{% block title %}Home - OpenAgents{% endblock %}
-
-{% block description %}Your gateway to intelligent automation and AI-powered solutions{% endblock %}
-
-{% block content %}
-<div class="prose prose-invert max-w-none">
-    <section class="hero">
-        <h1 class="text-3xl font-bold mb-4">Welcome to OpenAgents</h1>
-        <p class="text-xl mb-8">Your gateway to intelligent automation and AI-powered solutions</p>
-    </section>
-
-    <section class="features">
-        <h2 class="text-2xl font-bold mb-6">Featured Services</h2>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="feature-card border border-white p-6">
-                <h3 class="text-xl font-bold mb-3">AI Agents</h3>
-                <p class="mb-4">Discover our suite of intelligent agents ready to assist you</p>
-                <a href="/agents" class="inline-block bg-black hover:bg-zinc-900 text-white px-4 py-2 border border-white">Learn More</a>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Home - OpenAgents</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Your gateway to intelligent automation and AI-powered solutions">
+    <meta name="application-name" content="OpenAgents"/>
+    <meta name="author" content="OpenAgents, Inc.">
+    <meta name="format-detection" content="telephone=no">
+    <link rel="canonical" href="https://openagents.com"/>
+    <link rel="stylesheet" href="/css/style.css"/>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-black text-white font-mono max-w-[60rem] sm:border sm:border-white leading-6 mt-8 mb-8 py-2 px-4 pb-1 mx-auto">
+    <div class="container mx-auto">
+        <header class="py-2 mb-5">
+            <div class="flex justify-between items-center w-full">
+                <span class="text-lg font-bold">OpenAgents</span>
             </div>
-            <div class="feature-card border border-white p-6">
-                <h3 class="text-xl font-bold mb-3">Video Series</h3>
-                <p class="mb-4">Watch our educational content about AI and automation</p>
-                <a href="/video-series" class="inline-block bg-black hover:bg-zinc-900 text-white px-4 py-2 border border-white">Watch Now</a>
+            <div class="mt-4">
+                <nav>
+                    <ul class="grid grid-cols-3 gap-2 lg:grid-cols-6">
+                        <li class="flex justify-center mb-1">
+                            <a href="/" class="btn-nav bg-black hover:bg-zinc-900 text-white text-xs inline-flex items-center justify-center whitespace-nowrap select-none text-center align-middle no-underline outline-none w-full px-6 py-1 border border-white">Home</a>
+                        </li>
+                        <li class="flex justify-center mb-1">
+                            <a href="/agents" class="btn-nav bg-black hover:bg-zinc-900 text-white text-xs inline-flex items-center justify-center whitespace-nowrap select-none text-center align-middle no-underline outline-none w-full px-6 py-1 border border-white">Agents</a>
+                        </li>
+                        <li class="flex justify-center mb-1">
+                            <a href="/video-series" class="btn-nav bg-black hover:bg-zinc-900 text-white text-xs inline-flex items-center justify-center whitespace-nowrap select-none text-center align-middle no-underline outline-none w-full px-6 py-1 border border-white">Videos</a>
+                        </li>
+                        <li class="flex justify-center mb-1">
+                            <a href="/business" class="btn-nav bg-black hover:bg-zinc-900 text-white text-xs inline-flex items-center justify-center whitespace-nowrap select-none text-center align-middle no-underline outline-none w-full px-6 py-1 border border-white">Business</a>
+                        </li>
+                    </ul>
+                </nav>
             </div>
-            <div class="feature-card border border-white p-6">
-                <h3 class="text-xl font-bold mb-3">Business Solutions</h3>
-                <p class="mb-4">Enterprise-grade AI solutions for your organization</p>
-                <a href="/business" class="inline-block bg-black hover:bg-zinc-900 text-white px-4 py-2 border border-white">Explore</a>
-            </div>
+        </header>
+
+        <div class="prose prose-invert max-w-none">
+            <section class="hero">
+                <h1 class="text-3xl font-bold mb-4">Welcome to OpenAgents</h1>
+                <p class="text-xl mb-8">Your gateway to intelligent automation and AI-powered solutions</p>
+            </section>
+
+            <section class="features">
+                <h2 class="text-2xl font-bold mb-6">Featured Services</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="feature-card border border-white p-6">
+                        <h3 class="text-xl font-bold mb-3">AI Agents</h3>
+                        <p class="mb-4">Discover our suite of intelligent agents ready to assist you</p>
+                        <a href="/agents" class="inline-block bg-black hover:bg-zinc-900 text-white px-4 py-2 border border-white">Learn More</a>
+                    </div>
+                    <div class="feature-card border border-white p-6">
+                        <h3 class="text-xl font-bold mb-3">Video Series</h3>
+                        <p class="mb-4">Watch our educational content about AI and automation</p>
+                        <a href="/video-series" class="inline-block bg-black hover:bg-zinc-900 text-white px-4 py-2 border border-white">Watch Now</a>
+                    </div>
+                    <div class="feature-card border border-white p-6">
+                        <h3 class="text-xl font-bold mb-3">Business Solutions</h3>
+                        <p class="mb-4">Enterprise-grade AI solutions for your organization</p>
+                        <a href="/business" class="inline-block bg-black hover:bg-zinc-900 text-white px-4 py-2 border border-white">Explore</a>
+                    </div>
+                </div>
+            </section>
         </div>
-    </section>
-</div>
-{% endblock %}
+    </div>
+</body>
+</html>
