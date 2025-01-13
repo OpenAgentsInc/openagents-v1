@@ -1,0 +1,35 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Home - OpenAgents{% endblock %}
+
+{% block description %}Your gateway to intelligent automation and AI-powered solutions{% endblock %}
+
+{% block content %}
+<div class="prose prose-invert max-w-none">
+    <section class="hero">
+        <h1 class="text-3xl font-bold mb-4">Welcome to OpenAgents</h1>
+        <p class="text-xl mb-8">Your gateway to intelligent automation and AI-powered solutions</p>
+    </section>
+
+    <section class="features">
+        <h2 class="text-2xl font-bold mb-6">Featured Services</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="feature-card border border-white p-6">
+                <h3 class="text-xl font-bold mb-3">AI Agents</h3>
+                <p class="mb-4">Discover our suite of intelligent agents ready to assist you</p>
+                <a href="/agents" class="inline-block bg-black hover:bg-zinc-900 text-white px-4 py-2 border border-white">Learn More</a>
+            </div>
+            <div class="feature-card border border-white p-6">
+                <h3 class="text-xl font-bold mb-3">Video Series</h3>
+                <p class="mb-4">Watch our educational content about AI and automation</p>
+                <a href="/video-series" class="inline-block bg-black hover:bg-zinc-900 text-white px-4 py-2 border border-white">Watch Now</a>
+            </div>
+            <div class="feature-card border border-white p-6">
+                <h3 class="text-xl font-bold mb-3">Business Solutions</h3>
+                <p class="mb-4">Enterprise-grade AI solutions for your organization</p>
+                <a href="/business" class="inline-block bg-black hover:bg-zinc-900 text-white px-4 py-2 border border-white">Explore</a>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}
