@@ -4,6 +4,14 @@ use std::path::PathBuf;
 
 use crate::emailoptin::subscribe;
 
+#[get("/home")]
+pub async fn home() -> impl Responder {
+    HttpResponse::Ok().json(serde_json::json!({
+        "status": "healthy"
+    }))
+}
+
+
 #[get("/health")]
 pub async fn health_check() -> impl Responder {
     HttpResponse::Ok().json(serde_json::json!({
