@@ -1,0 +1,20 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Changelog - OpenAgents{% endblock %}
+
+{% block description %}Latest updates and changes to OpenAgents platform{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/css/changelog.css"/>
+{% endblock %}
+
+{% block content %}
+<div class="prose prose-invert max-w-none">
+    <h1 class="text-3xl font-bold mb-4">Changelog</h1>
+    <p class="text-xl mb-8">Track the latest updates and improvements to the OpenAgents platform.</p>
+    
+    <div id="changelog-entries" class="space-y-8">
+        <!-- Changelog entries will be dynamically loaded -->
+    </div>
+</div>
+{% endblock %}
