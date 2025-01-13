@@ -1,8 +1,4 @@
-use axum::{
-    response::Html,
-    routing::get,
-    Router,
-};
+use actix_web::{web, HttpResponse, Result};
 use askama::Template;
 
 #[derive(Template)]
@@ -29,42 +25,50 @@ struct ContactTemplate;
 #[template(path = "pages/changelog.html")]
 struct ChangelogTemplate;
 
-async fn home() -> Html<String> {
+async fn home() -> Result<HttpResponse> {
     let template = HomeTemplate {};
-    Html(template.render().unwrap())
+    let html = template.render().map_err(|_| actix_web::error::ErrorInternalServerError("Template error"))?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(html))
 }
 
-async fn video_series() -> Html<String> {
+async fn video_series() -> Result<HttpResponse> {
     let template = VideoSeriesTemplate {};
-    Html(template.render().unwrap())
+    let html = template.render().map_err(|_| actix_web::error::ErrorInternalServerError("Template error"))?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(html))
 }
 
-async fn agents() -> Html<String> {
+async fn agents() -> Result<HttpResponse> {
     let template = AgentsTemplate {};
-    Html(template.render().unwrap())
+    let html = template.render().map_err(|_| actix_web::error::ErrorInternalServerError("Template error"))?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(html))
 }
 
-async fn business() -> Html<String> {
+async fn business() -> Result<HttpResponse> {
     let template = BusinessTemplate {};
-    Html(template.render().unwrap())
+    let html = template.render().map_err(|_| actix_web::error::ErrorInternalServerError("Template error"))?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(html))
 }
 
-async fn contact() -> Html<String> {
+async fn contact() -> Result<HttpResponse> {
     let template = ContactTemplate {};
-    Html(template.render().unwrap())
+    let html = template.render().map_err(|_| actix_web::error::ErrorInternalServerError("Template error"))?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(html))
 }
 
-async fn changelog() -> Html<String> {
+async fn changelog() -> Result<HttpResponse> {
     let template = ChangelogTemplate {};
-    Html(template.render().unwrap())
+    let html = template.render().map_err(|_| actix_web::error::ErrorInternalServerError("Template error"))?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(html))
 }
 
-pub fn routes() -> Router {
-    Router::new()
-        .route("/", get(home))
-        .route("/video-series", get(video_series))
-        .route("/agents", get(agents))
-        .route("/business", get(business))
-        .route("/contact", get(contact))
-        .route("/changelog", get(changelog))
+pub fn configure(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::scope("")
+            .route("/", web::get().to(home))
+            .route("/video-series", web::get().to(video_series))
+            .route("/agents", web::get().to(agents))
+            .route("/business", web::get().to(business))
+            .route("/contact", web::get().to(contact))
+            .route("/changelog", web::get().to(changelog))
+    );
 }
