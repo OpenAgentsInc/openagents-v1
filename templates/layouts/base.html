@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}OpenAgents{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{% block description %}Software to increase human agency.{% endblock %}">
+    <meta name="application-name" content="OpenAgents"/>
+    <meta name="author" content="OpenAgents, Inc.">
+    <meta name="format-detection" content="telephone=no">
+    <link rel="canonical" href="https://openagents.com"/>
+    <link rel="stylesheet" href="/css/style.css"/>
+    <script src="https://cdn.tailwindcss.com"></script>
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-black text-white font-mono max-w-[60rem] sm:border sm:border-white leading-6 mt-8 mb-8 py-2 px-4 pb-1 mx-auto">
+    <div class="container mx-auto">
+        <header class="py-2 mb-5">
+            <div class="flex justify-between items-center w-full">
+                <span class="text-lg font-bold">OpenAgents</span>
+            </div>
+            <div class="mt-4">
+                <nav>
+                    <ul class="grid grid-cols-3 gap-2 lg:grid-cols-6">
+                        <li class="flex justify-center mb-1">
+                            <a href="/" class="btn-nav bg-black hover:bg-zinc-900 text-white text-xs inline-flex items-center justify-center whitespace-nowrap select-none text-center align-middle no-underline outline-none w-full px-6 py-1 border border-white">Home</a>
+                        </li>
+                        <li class="flex justify-center mb-1">
+                            <a href="/agents" class="btn-nav bg-black hover:bg-zinc-900 text-white text-xs inline-flex items-center justify-center whitespace-nowrap select-none text-center align-middle no-underline outline-none w-full px-6 py-1 border border-white">Agents</a>
+                        </li>
+                        <li class="flex justify-center mb-1">
+                            <a href="/video-series" class="btn-nav bg-black hover:bg-zinc-900 text-white text-xs inline-flex items-center justify-center whitespace-nowrap select-none text-center align-middle no-underline outline-none w-full px-6 py-1 border border-white">Videos</a>
+                        </li>
+                        <li class="flex justify-center mb-1">
+                            <a href="/business" class="btn-nav bg-black hover:bg-zinc-900 text-white text-xs inline-flex items-center justify-center whitespace-nowrap select-none text-center align-middle no-underline outline-none w-full px-6 py-1 border border-white">Business</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </header>
+
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>
