@@ -4,13 +4,17 @@ use std::path::PathBuf;
 
 use crate::emailoptin::subscribe;
 
-#[get("/home")]
-pub async fn home() -> impl Responder {
-    HttpResponse::Ok().json(serde_json::json!({
-        "status": "healthy"
-    }))
+#[get("/")]
+pub async fn index_page() -> impl Responder {
+    let path: PathBuf = "./static/index.html".into();
+    NamedFile::open(path)
 }
 
+#[get("/home")]
+pub async fn home_page() -> impl Responder {
+    let path: PathBuf = "./static/index.html".into();
+    NamedFile::open(path)
+}
 
 #[get("/health")]
 pub async fn health_check() -> impl Responder {
@@ -68,7 +72,9 @@ pub async fn contact_page() -> impl Responder {
 }
 
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(health_check)
+    cfg.service(index_page)
+        .service(home_page)
+        .service(health_check)
         .service(new_page)
         .service(agents_page)
         .service(video_series_page)
