@@ -1,6 +1,6 @@
 # Project Hierarchy
 
-Generated on: 2025-01-13 06:13:11
+Generated on: 2025-01-13 09:21:17
 
 ### Structure
 
@@ -43,6 +43,10 @@ Generated on: 2025-01-13 06:13:11
 |   |   |-- mod.rs
 |   |   |-- relay.rs
 |   |   `-- subscription.rs
+|   |-- routes/
+|   |   `-- home/
+|   |       |-- home.html
+|   |       `-- mod.rs
 |   |-- server/
 |   |   |-- admin/
 |   |   |   |-- middleware.rs
@@ -94,9 +98,13 @@ Generated on: 2025-01-13 06:13:11
 |   |   |-- ViewSystem.js
 |   |   |-- client-side-templates.js
 |   |   |-- htmx.min.js
+|   |   |-- layout.js
 |   |   |-- main.js
 |   |   |-- mustache.js
 |   |   `-- three.min.js
+|   |-- layout/
+|   |   |-- footer.html
+|   |   `-- header.html
 |   |-- nostr/
 |   |   |-- agent-methods.ts
 |   |   |-- base.ts
@@ -122,6 +130,7 @@ Generated on: 2025-01-13 06:13:11
 |   |-- company.html
 |   |-- contact.html
 |   |-- favicon.ico
+|   |-- home.html
 |   |-- index-old.html
 |   |-- index.html
 |   |-- justfile
@@ -132,6 +141,7 @@ Generated on: 2025-01-13 06:13:11
 |   |-- nostr.html
 |   |-- onyx.png
 |   |-- package.json
+|   |-- styles.css
 |   |-- tsconfig.json
 |   |-- video-series.html
 |   `-- yarn.lock
@@ -165,5 +175,5 @@ Generated on: 2025-01-13 06:13:11
 |-- html
 `-- spec.yaml
 
-27 directories, 132 files
+30 directories, 139 files
 ```
