@@ -1,6 +1,6 @@
 # Project Hierarchy
 
-Generated on: 2025-01-13 09:21:17
+Generated on: 2025-01-13 09:25:07
 
 ### Structure
 
@@ -44,9 +44,10 @@ Generated on: 2025-01-13 09:21:17
 |   |   |-- relay.rs
 |   |   `-- subscription.rs
 |   |-- routes/
-|   |   `-- home/
-|   |       |-- home.html
-|   |       `-- mod.rs
+|   |   |-- home/
+|   |   |   |-- home.html
+|   |   |   `-- mod.rs
+|   |   `-- mod.rs
 |   |-- server/
 |   |   |-- admin/
 |   |   |   |-- middleware.rs
@@ -130,7 +131,6 @@ Generated on: 2025-01-13 09:21:17
 |   |-- company.html
 |   |-- contact.html
 |   |-- favicon.ico
-|   |-- home.html
 |   |-- index-old.html
 |   |-- index.html
 |   |-- justfile
@@ -143,12 +143,16 @@ Generated on: 2025-01-13 09:21:17
 |   |-- package.json
 |   |-- styles.css
 |   |-- tsconfig.json
-|   |-- video-series.html
 |   `-- yarn.lock
 |-- templates/
-|   `-- admin/
-|       |-- dashboard.html
-|       `-- login.html
+|   |-- admin/
+|   |   |-- dashboard.html
+|   |   `-- login.html
+|   |-- layouts/
+|   |   `-- base.html
+|   `-- pages/
+|       |-- home.html
+|       `-- video-series.html
 |-- tests/
 |   |-- agent/
 |   |   |-- core.rs
@@ -175,5 +179,5 @@ Generated on: 2025-01-13 09:21:17
 |-- html
 `-- spec.yaml
 
-30 directories, 139 files
+32 directories, 141 files
 ```
