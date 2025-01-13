@@ -16,6 +16,7 @@ actix-web = "4.4"
 actix-web-actors = "4.2"
 actix-files = "0.6"
 actix-cors = "0.6"
+askama = { version = "0.12", features = ["with-actix-web"] }
 env_logger = "0.10"
 dotenv = "0.15"
 futures = "0.3"
