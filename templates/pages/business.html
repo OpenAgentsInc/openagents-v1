@@ -1,0 +1,32 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Business Solutions - OpenAgents{% endblock %}
+
+{% block description %}Enterprise-grade AI solutions for your organization{% endblock %}
+
+{% block content %}
+<div class="prose prose-invert max-w-none">
+    <h1 class="text-3xl font-bold mb-4">Business Solutions</h1>
+    <p class="text-xl mb-8">Enterprise-grade AI solutions designed to transform your organization.</p>
+    
+    <section class="mb-12">
+        <h2 class="text-2xl font-bold mb-6">Our Enterprise Offerings</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="border border-white p-6">
+                <h3 class="text-xl font-bold mb-3">Custom AI Agents</h3>
+                <p class="mb-4">Tailored AI solutions designed specifically for your business needs</p>
+            </div>
+            <div class="border border-white p-6">
+                <h3 class="text-xl font-bold mb-3">Integration Services</h3>
+                <p class="mb-4">Seamless integration with your existing systems and workflows</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="mb-12">
+        <h2 class="text-2xl font-bold mb-6">Contact Us</h2>
+        <p class="mb-4">Ready to transform your business with AI? Get in touch with our team.</p>
+        <a href="/contact" class="inline-block bg-black hover:bg-zinc-900 text-white px-6 py-3 border border-white">Contact Sales</a>
+    </section>
+</div>
+{% endblock %}
