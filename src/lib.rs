@@ -7,35 +7,13 @@ pub mod server;
 
 use actix_cors::Cors;
 use actix_web::{web, App, HttpServer};
-use actix_web_actors::ws;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{debug, info, warn};
-use uuid::Uuid;
 
 use crate::configuration::get_configuration;
 use crate::nostr::db::Database;
 use crate::nostr::event::Event;
-use crate::nostr::relay::RelayWs;
-
-async fn root_route(
-    req: actix_web::HttpRequest,
-    stream: web::Payload,
-    event_tx: web::Data<broadcast::Sender<Event>>,
-    db: web::Data<Arc<Database>>,
-) -> Result<actix_web::HttpResponse, actix_web::Error> {
-    // Check if this is a WebSocket upgrade request
-    if req.headers().contains_key("Upgrade") {
-        let id = Uuid::new_v4().to_string();
-        let ws = RelayWs::new(id, event_tx.get_ref().clone(), db.get_ref().clone());
-        ws::start(ws, &req, stream)
-    } else {
-        // Not a WebSocket request, serve index.html
-        Ok(actix_web::HttpResponse::Ok()
-            .content_type("text/html")
-            .body(std::fs::read_to_string("static/index.html").unwrap()))
-    }
-}
 
 #[actix_web::main]
 pub async fn run() -> std::io::Result<()> {
@@ -79,7 +57,6 @@ pub async fn run() -> std::io::Result<()> {
             .wrap(cors)
             .app_data(event_tx.clone())
             .app_data(db.clone())
-            .route("/", web::get().to(root_route))
             .configure(server::config::configure_app)
     };
 
