@@ -54,7 +54,6 @@ where
 {
     type Rejection = AuthError;
 
-    #[allow(unused_variables)]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         // Get cookies from the request
         let cookies = CookieJar::from_headers(&parts.headers);
