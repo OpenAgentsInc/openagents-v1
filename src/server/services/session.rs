@@ -5,16 +5,22 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Clone)]
 pub enum SessionError {
     #[error("Session not found")]
     NotFound,
     #[error("Session expired")]
     Expired,
     #[error("Database error: {0}")]
-    Database(#[from] sqlx::Error),
+    Database(String),
     #[error("Failed to generate token")]
     TokenGeneration,
+}
+
+impl From<sqlx::Error> for SessionError {
+    fn from(err: sqlx::Error) -> Self {
+        SessionError::Database(err.to_string())
+    }
 }
 
 impl From<SessionError> for StatusCode {
@@ -27,13 +33,16 @@ impl From<SessionError> for StatusCode {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 pub struct Session {
     pub id: Uuid,
     pub user_id: Uuid,
     pub token: String,
+    #[serde(with = "chrono::serde::ts_seconds")]
     pub expires_at: DateTime<Utc>,
+    #[serde(with = "chrono::serde::ts_seconds")]
     pub created_at: DateTime<Utc>,
+    #[serde(with = "chrono::serde::ts_seconds")]
     pub updated_at: DateTime<Utc>,
 }
 
