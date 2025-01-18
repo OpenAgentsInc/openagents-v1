@@ -4,7 +4,7 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use std::fmt::{self, Display};
 use uuid::Uuid;
 use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm};
