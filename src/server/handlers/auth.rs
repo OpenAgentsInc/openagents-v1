@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use time::Duration;
 
-use crate::server::services::{auth::{OIDCConfig, AuthResponse}, session::Session};
+use crate::server::services::{auth::{OIDCConfig}, session::Session};
 
 const SESSION_COOKIE_NAME: &str = "session";
 const SESSION_DURATION_DAYS: i64 = 7;
