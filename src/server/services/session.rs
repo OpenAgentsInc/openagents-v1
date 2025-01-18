@@ -190,7 +190,7 @@ impl Session {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server::services::test_helpers::{get_test_pool, cleanup_test_data};
+    use crate::server::services::test_helpers::{get_test_pool, cleanup_test_data, setup_test_db};
     use sqlx::query;
 
     async fn create_test_user(pool: &PgPool) -> Uuid {
@@ -211,6 +211,7 @@ mod tests {
     #[tokio::test]
     async fn test_session_lifecycle() {
         let pool = get_test_pool().await;
+        setup_test_db(pool).await;
         cleanup_test_data(pool).await;
         
         // Create a test user
@@ -257,6 +258,7 @@ mod tests {
     #[tokio::test]
     async fn test_expired_session() {
         let pool = get_test_pool().await;
+        setup_test_db(pool).await;
         cleanup_test_data(pool).await;
         
         // Create a test user
@@ -295,6 +297,7 @@ mod tests {
     #[tokio::test]
     async fn test_multiple_sessions() {
         let pool = get_test_pool().await;
+        setup_test_db(pool).await;
         cleanup_test_data(pool).await;
         
         // Create test user
