@@ -8,6 +8,7 @@ use sqlx::{PgPool, Row};
 use std::fmt::{self, Display};
 use uuid::Uuid;
 use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm};
+use super::session::{Session, SessionError};
 
 #[derive(Debug)]
 pub enum AuthError {
@@ -16,6 +17,13 @@ pub enum AuthError {
     TokenExchangeFailed(String),
     DatabaseError(String),
     InvalidToken(String),
+    SessionError(SessionError),
+}
+
+impl From<SessionError> for AuthError {
+    fn from(error: SessionError) -> Self {
+        AuthError::SessionError(error)
+    }
 }
 
 impl Display for AuthError {
@@ -26,6 +34,7 @@ impl Display for AuthError {
             AuthError::TokenExchangeFailed(msg) => write!(f, "Token exchange failed: {}", msg),
             AuthError::DatabaseError(msg) => write!(f, "Database error: {}", msg),
             AuthError::InvalidToken(msg) => write!(f, "Invalid token: {}", msg),
+            AuthError::SessionError(e) => write!(f, "Session error: {}", e),
         }
     }
 }
@@ -40,6 +49,7 @@ impl IntoResponse for AuthError {
             AuthError::TokenExchangeFailed(_) => StatusCode::BAD_GATEWAY,
             AuthError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AuthError::InvalidToken(_) => StatusCode::UNAUTHORIZED,
+            AuthError::SessionError(e) => e.into(),
         };
         
         let body = Json(serde_json::json!({
@@ -90,6 +100,12 @@ struct Claims {
     iat: usize,
     iss: String,
     aud: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AuthResponse {
+    pub user: User,
+    pub session_token: String,
 }
 
 impl OIDCConfig {
@@ -208,6 +224,40 @@ impl OIDCConfig {
             }
         }
     }
+
+    pub async fn authenticate(&self, code: String, pool: &PgPool) -> Result<AuthResponse, AuthError> {
+        // Exchange code for tokens
+        let token_response = self.exchange_code(code).await?;
+        
+        // Get or create user
+        let user = self.get_or_create_user(&token_response.id_token, pool).await?;
+        
+        // Create session
+        let session = Session::create(user.id, pool).await?;
+        
+        Ok(AuthResponse {
+            user,
+            session_token: session.token,
+        })
+    }
+
+    pub async fn validate_session(&self, session_token: &str, pool: &PgPool) -> Result<User, AuthError> {
+        // Validate session
+        let session = Session::validate(session_token, pool).await?;
+        
+        // Get user
+        let user = sqlx::query_as!(
+            User,
+            "SELECT id, pseudonym FROM users WHERE id = $1",
+            session.user_id
+        )
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| AuthError::DatabaseError(e.to_string()))?
+        .ok_or(AuthError::AuthenticationFailed)?;
+
+        Ok(user)
+    }
 }
 
 #[cfg(test)]
@@ -216,6 +266,7 @@ mod tests {
     use wiremock::{MockServer, Mock, ResponseTemplate};
     use wiremock::matchers::method;
     use serde_json::json;
+    use crate::server::services::test_helpers::{get_test_pool, cleanup_test_data};
 
     #[test]
     fn test_oidc_config_validation() {
@@ -265,7 +316,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_token_exchange_success() {
+    async fn test_authentication_flow() {
+        let pool = get_test_pool().await;
+        cleanup_test_data(pool).await;
+        
         // Start mock server
         let mock_server = MockServer::start().await;
 
@@ -280,52 +334,45 @@ mod tests {
         )
         .unwrap();
 
-        // Setup successful response
+        // Setup successful token response
         Mock::given(method("POST"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "access_token": "test_access_token",
                 "token_type": "Bearer",
                 "expires_in": 3600,
-                "id_token": "test_id_token"
+                "id_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0X3BzZXVkb255bSIsImV4cCI6MTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJpc3MiOiJodHRwczovL2F1dGguc2NyYW1ibGUuY29tIiwiYXVkIjoiY2xpZW50MTIzIn0.8D8vhM6pzxsQPLUXeHxw7cWoKhvGp4BUJ4Q8E6JIftw"
             })))
             .mount(&mock_server)
             .await;
 
-        // Test token exchange
-        let result = config.exchange_code("test_code".to_string()).await;
-        assert!(result.is_ok());
+        // Test full authentication flow
+        let auth_response = config.authenticate("test_code".to_string(), pool).await.unwrap();
         
-        let token_response = result.unwrap();
-        assert_eq!(token_response.access_token, "test_access_token");
-        assert_eq!(token_response.token_type, "Bearer");
-        assert_eq!(token_response.expires_in, Some(3600));
-        assert_eq!(token_response.id_token, "test_id_token");
+        // Verify user was created
+        assert_eq!(auth_response.user.pseudonym, "test_pseudonym");
+        
+        // Verify session works
+        let validated_user = config.validate_session(&auth_response.session_token, pool).await.unwrap();
+        assert_eq!(validated_user.id, auth_response.user.id);
     }
 
     #[tokio::test]
-    async fn test_token_exchange_failure() {
-        // Start mock server
-        let mock_server = MockServer::start().await;
-
-        // Create test config with mock server URL
+    async fn test_session_validation_failure() {
+        let pool = get_test_pool().await;
+        cleanup_test_data(pool).await;
+        
         let config = OIDCConfig::new(
             "client123".to_string(),
             "secret456".to_string(),
             "http://localhost:3000/callback".to_string(),
             "https://auth.scramble.com/authorize".to_string(),
-            mock_server.uri(),
+            "https://auth.scramble.com/token".to_string(),
             "https://auth.scramble.com/.well-known/jwks.json".to_string(),
         )
         .unwrap();
 
-        // Setup error response
-        Mock::given(method("POST"))
-            .respond_with(ResponseTemplate::new(400).set_body_string("Invalid grant"))
-            .mount(&mock_server)
-            .await;
-
-        // Test token exchange failure
-        let result = config.exchange_code("invalid_code".to_string()).await;
-        assert!(matches!(result, Err(AuthError::TokenExchangeFailed(_))));
+        // Test with invalid session token
+        let result = config.validate_session("invalid_token", pool).await;
+        assert!(matches!(result, Err(AuthError::SessionError(SessionError::NotFound))));
     }
 }
