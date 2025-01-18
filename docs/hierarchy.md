@@ -1,6 +1,6 @@
 # Project Hierarchy
 
-Generated on: 2025-01-17 12:33:05
+Generated on: 2025-01-18 09:57:16
 
 ### Structure
 
@@ -45,7 +45,9 @@ Generated on: 2025-01-17 12:33:05
 |-- migrations/
 |   |-- 20250110000000_initial.sql
 |   |-- 20250112001624_create_subscriptions_table.sql
-|   `-- 20250112002000_create_agent_tables.sql
+|   |-- 20250112002000_create_agent_tables.sql
+|   |-- 20250117000000_create_users_table.sql
+|   `-- 20250118000000_create_sessions_table.sql
 |-- scripts/
 |   |-- generate_hierarchy.sh*
 |   |-- init_db.sh*
@@ -66,9 +68,18 @@ Generated on: 2025-01-17 12:33:05
 |   |   |   |-- middleware.rs
 |   |   |   |-- mod.rs
 |   |   |   `-- routes.rs
+|   |   |-- handlers/
+|   |   |   |-- auth.rs
+|   |   |   `-- mod.rs
+|   |   |-- middleware/
+|   |   |   |-- auth.rs
+|   |   |   `-- mod.rs
 |   |   |-- services/
+|   |   |   |-- auth.rs
 |   |   |   |-- mod.rs
-|   |   |   `-- repomap.rs
+|   |   |   |-- repomap.rs
+|   |   |   |-- session.rs
+|   |   |   `-- test_helpers.rs
 |   |   |-- config.rs
 |   |   `-- mod.rs
 |   |-- configuration.rs
@@ -135,5 +146,5 @@ Generated on: 2025-01-17 12:33:05
 |-- spec.yaml
 `-- tailwind.config.cjs
 
-25 directories, 104 files
+27 directories, 113 files
 ```
