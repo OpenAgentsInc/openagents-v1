@@ -42,9 +42,9 @@ pub async fn login(
 
 #[debug_handler]
 pub async fn callback(
-    cookies: CookieJar,
     State(config): State<OIDCConfig>,
     State(pool): State<PgPool>,
+    cookies: CookieJar,
     Query(params): Query<CallbackParams>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
     // Exchange code for tokens and create session
@@ -78,8 +78,8 @@ pub async fn callback(
 
 #[debug_handler]
 pub async fn logout(
-    cookies: CookieJar,
     State(pool): State<PgPool>,
+    cookies: CookieJar,
 ) -> impl IntoResponse {
     // Get session token from cookie
     if let Some(cookie) = cookies.get(SESSION_COOKIE_NAME) {
