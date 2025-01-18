@@ -54,12 +54,12 @@ where
 {
     type Rejection = AuthError;
 
-    async fn from_request_parts<'__r>(
-        __parts: &'__r mut Parts,
-        __state: &S,
+    async fn from_request_parts(
+        parts: &mut Parts,
+        _state: &S,
     ) -> Result<Self, Self::Rejection> {
         // Get cookies from the request
-        let cookies = CookieJar::from_headers(&__parts.headers);
+        let cookies = CookieJar::from_headers(&parts.headers);
 
         // Get session token from cookie
         let session_token = cookies
@@ -69,7 +69,7 @@ where
             .to_string();
 
         // Get app state
-        let state = __parts.extensions.get::<AppState>()
+        let state = parts.extensions.get::<AppState>()
             .ok_or(AuthError::NotAuthenticated)?;
 
         // Validate session
