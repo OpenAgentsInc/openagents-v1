@@ -54,7 +54,7 @@ where
 {
     type Rejection = AuthError;
 
-    async fn from_request_parts(
+    async fn from_request_parts<B>(
         parts: &mut Parts,
         _: &S,
     ) -> Result<Self, Self::Rejection> {
