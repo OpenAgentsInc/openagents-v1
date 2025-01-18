@@ -47,6 +47,7 @@ http-body-util = "0.1"
 http = "1.0"
 thiserror = "1.0"
 urlencoding = "2.1"
+jsonwebtoken = "9.2"
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full", "macros", "rt-multi-thread"] }
