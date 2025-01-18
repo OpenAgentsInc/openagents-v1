@@ -31,24 +31,34 @@ struct LoginResponse {
     url: String,
 }
 
-#[debug_handler(state = (OIDCConfig))]
+#[derive(Clone)]
+pub struct AppState {
+    config: OIDCConfig,
+    pool: PgPool,
+}
+
+impl AppState {
+    pub fn new(config: OIDCConfig, pool: PgPool) -> Self {
+        Self { config, pool }
+    }
+}
+
+#[debug_handler]
 pub async fn login(
-    State(config): State<OIDCConfig>,
+    State(state): State<AppState>,
 ) -> impl IntoResponse {
-    let auth_url = config.authorization_url();
-    
+    let auth_url = state.config.authorization_url();
     Json(LoginResponse { url: auth_url })
 }
 
-#[debug_handler(state = (OIDCConfig, PgPool))]
+#[debug_handler]
 pub async fn callback(
-    State(config): State<OIDCConfig>,
-    State(pool): State<PgPool>,
+    State(state): State<AppState>,
     cookies: CookieJar,
     Query(params): Query<CallbackParams>,
-) -> Result<impl IntoResponse, impl IntoResponse> {
+) -> Result<(HeaderMap, Json<serde_json::Value>), (StatusCode, Json<ErrorResponse>)> {
     // Exchange code for tokens and create session
-    let auth_response = config.authenticate(params.code, &pool)
+    let auth_response = state.config.authenticate(params.code, &state.pool)
         .await
         .map_err(|e| {
             (
@@ -75,16 +85,16 @@ pub async fn callback(
     Ok((headers, Json(auth_response)))
 }
 
-#[debug_handler(state = (PgPool))]
+#[debug_handler]
 pub async fn logout(
-    State(pool): State<PgPool>,
+    State(state): State<AppState>,
     cookies: CookieJar,
 ) -> impl IntoResponse {
     // Get session token from cookie
     if let Some(cookie) = cookies.get(SESSION_COOKIE_NAME) {
         // Try to find and delete session
-        if let Ok(session) = Session::validate(cookie.value(), &pool).await {
-            let _ = session.delete(&pool).await;
+        if let Ok(session) = Session::validate(cookie.value(), &state.pool).await {
+            let _ = session.delete(&state.pool).await;
         }
     }
 
@@ -150,12 +160,15 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        // Create test app with combined state
+        // Create app state
+        let state = AppState::new(config, pool.clone());
+
+        // Create test app
         let app = Router::new()
             .route("/login", get(login))
             .route("/callback", get(callback))
             .route("/logout", post(logout))
-            .with_state((config, pool.clone()));
+            .with_state(state);
 
         // Test login endpoint
         let response = app
