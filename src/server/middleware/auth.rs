@@ -3,13 +3,13 @@ use axum::{
     http::{request::Parts, StatusCode},
     response::IntoResponse,
     Json,
-    RequestPartsExt,
 };
 use axum_extra::extract::CookieJar;
 use serde::Serialize;
 use sqlx::PgPool;
 
 use crate::server::services::{session::{Session, SessionError}, auth::User};
+use crate::server::handlers::auth::AppState;
 
 const SESSION_COOKIE_NAME: &str = "session";
 
@@ -51,13 +51,13 @@ struct ErrorResponse {
 impl<S> FromRequestParts<S> for AuthenticatedUser
 where
     S: Send + Sync,
-    PgPool: FromRequestParts<S>,
+    AppState: FromRequestParts<S>,
 {
     type Rejection = AuthError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        // Get the database pool from the state
-        let pool = PgPool::from_request_parts(parts, state)
+        // Get the app state
+        let app_state = AppState::from_request_parts(parts, state)
             .await
             .map_err(|_| AuthError::NotAuthenticated)?;
 
@@ -72,7 +72,7 @@ where
             .to_string();
 
         // Validate session
-        let session = Session::validate(&session_token, &pool)
+        let session = Session::validate(&session_token, &app_state.pool)
             .await
             .map_err(AuthError::SessionError)?;
 
@@ -82,7 +82,7 @@ where
             "SELECT id, pseudonym FROM users WHERE id = $1",
             session.user_id
         )
-        .fetch_optional(&pool)
+        .fetch_optional(&app_state.pool)
         .await
         .map_err(|e| AuthError::SessionError(SessionError::Database(e.to_string())))?
         .ok_or(AuthError::NotAuthenticated)?;
@@ -101,12 +101,10 @@ mod tests {
         response::IntoResponse,
         routing::get,
         Router,
-        debug_handler,
     };
     use axum_extra::extract::cookie::Cookie;
     use tower::ServiceExt;
 
-    #[debug_handler]
     async fn test_handler(user: AuthenticatedUser) -> impl IntoResponse {
         Json(user.user)
     }
@@ -133,10 +131,24 @@ mod tests {
 
         let session = Session::create(user.id, pool).await.unwrap();
 
+        // Create app state
+        let state = AppState::new(
+            crate::server::services::auth::OIDCConfig::new(
+                "test".to_string(),
+                "test".to_string(),
+                "test".to_string(),
+                "test".to_string(),
+                "test".to_string(),
+                "test".to_string(),
+            )
+            .unwrap(),
+            pool.clone(),
+        );
+
         // Create test app
         let app = Router::new()
             .route("/test", get(test_handler))
-            .with_state(pool.clone());
+            .with_state(state);
 
         // Test without session cookie
         let response = app
