@@ -52,7 +52,7 @@ pub async fn login(
 pub async fn callback(
     Extension(state): Extension<AppState>,
     Query(params): Query<CallbackParams>,
-) -> Result<(HeaderMap, Json<AuthResponse>), (StatusCode, Json<ErrorResponse>)> {
+) -> Result<impl IntoResponse + Send + 'static, impl IntoResponse + Send + 'static> {
     // Exchange code for tokens and create session
     let auth_response = state.config.authenticate(params.code, &state.pool)
         .await
