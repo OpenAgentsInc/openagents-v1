@@ -34,7 +34,7 @@ impl Display for AuthError {
             AuthError::TokenExchangeFailed(msg) => write!(f, "Token exchange failed: {}", msg),
             AuthError::DatabaseError(msg) => write!(f, "Database error: {}", msg),
             AuthError::InvalidToken(msg) => write!(f, "Invalid token: {}", msg),
-            AuthError::SessionError(e) => write!(f, "Session error: {}", e),
+            AuthError::SessionError(ref e) => write!(f, "Session error: {}", e),
         }
     }
 }
@@ -43,13 +43,13 @@ impl std::error::Error for AuthError {}
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> axum::response::Response {
-        let status = match self {
+        let status = match &self {
             AuthError::InvalidConfig => StatusCode::INTERNAL_SERVER_ERROR,
             AuthError::AuthenticationFailed => StatusCode::UNAUTHORIZED,
             AuthError::TokenExchangeFailed(_) => StatusCode::BAD_GATEWAY,
             AuthError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AuthError::InvalidToken(_) => StatusCode::UNAUTHORIZED,
-            AuthError::SessionError(e) => e.into(),
+            AuthError::SessionError(e) => (*e).clone().into(),
         };
         
         let body = Json(serde_json::json!({
