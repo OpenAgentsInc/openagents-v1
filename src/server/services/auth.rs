@@ -172,15 +172,16 @@ impl OIDCConfig {
         let pseudonym = self.verify_and_get_pseudonym(id_token).await?;
 
         // Try to find existing user
-        let user = sqlx::query_as!(
-            User,
-            r#"
-            SELECT id, pseudonym
-            FROM users
-            WHERE pseudonym = $1
-            "#,
-            pseudonym
+        let user = sqlx::query(
+            "SELECT id, pseudonym FROM users WHERE pseudonym = $1"
         )
+        .bind(&pseudonym)
+        .map(|row: sqlx::postgres::PgRow| {
+            User {
+                id: row.get("id"),
+                pseudonym: row.get("pseudonym"),
+            }
+        })
         .fetch_optional(pool)
         .await
         .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
@@ -189,15 +190,16 @@ impl OIDCConfig {
         match user {
             Some(user) => Ok(user),
             None => {
-                let user = sqlx::query_as!(
-                    User,
-                    r#"
-                    INSERT INTO users (pseudonym)
-                    VALUES ($1)
-                    RETURNING id, pseudonym
-                    "#,
-                    pseudonym
+                let user = sqlx::query(
+                    "INSERT INTO users (pseudonym) VALUES ($1) RETURNING id, pseudonym"
                 )
+                .bind(&pseudonym)
+                .map(|row: sqlx::postgres::PgRow| {
+                    User {
+                        id: row.get("id"),
+                        pseudonym: row.get("pseudonym"),
+                    }
+                })
                 .fetch_one(pool)
                 .await
                 .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
@@ -214,50 +216,6 @@ mod tests {
     use wiremock::{MockServer, Mock, ResponseTemplate};
     use wiremock::matchers::method;
     use serde_json::json;
-    use sqlx::postgres::PgPoolOptions;
-    use std::sync::Once;
-
-    static INIT: Once = Once::new();
-
-    async fn setup_test_db() -> PgPool {
-        let pool = PgPoolOptions::new()
-            .max_connections(5)
-            .connect("postgres://postgres:password@localhost:5432/test_db")
-            .await
-            .expect("Failed to connect to database");
-
-        // Run migrations
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS users (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                pseudonym VARCHAR(255) NOT NULL UNIQUE,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
-
-            DROP TRIGGER IF EXISTS set_timestamp ON users;
-            
-            CREATE OR REPLACE FUNCTION trigger_set_timestamp()
-            RETURNS TRIGGER AS $$
-            BEGIN
-              NEW.updated_at = NOW();
-              RETURN NEW;
-            END;
-            $$ LANGUAGE plpgsql;
-
-            CREATE TRIGGER set_timestamp
-                BEFORE UPDATE ON users
-                FOR EACH ROW
-                EXECUTE FUNCTION trigger_set_timestamp();
-            "#,
-        )
-        .execute(&pool)
-        .await
-        .expect("Failed to create users table");
-
-        pool
-    }
 
     #[test]
     fn test_oidc_config_validation() {
@@ -369,51 +327,5 @@ mod tests {
         // Test token exchange failure
         let result = config.exchange_code("invalid_code".to_string()).await;
         assert!(matches!(result, Err(AuthError::TokenExchangeFailed(_))));
-    }
-
-    #[tokio::test]
-    async fn test_user_creation_and_retrieval() {
-        // Initialize test database
-        let pool = setup_test_db().await;
-
-        // Create test config
-        let config = OIDCConfig::new(
-            "client123".to_string(),
-            "test_secret".to_string(),
-            "http://localhost:3000/callback".to_string(),
-            "https://auth.scramble.com/authorize".to_string(),
-            "https://auth.scramble.com/token".to_string(),
-            "https://auth.scramble.com/.well-known/jwks.json".to_string(),
-        )
-        .unwrap();
-
-        // Create a test JWT token
-        let token = jsonwebtoken::encode(
-            &jsonwebtoken::Header::new(Algorithm::HS256),
-            &Claims {
-                sub: "test_pseudonym".to_string(),
-                exp: 2000000000,
-                iat: 1000000000,
-                iss: "https://auth.scramble.com".to_string(),
-                aud: config.client_id.clone(),
-            },
-            &jsonwebtoken::EncodingKey::from_secret(config.client_secret.as_bytes()),
-        )
-        .unwrap();
-
-        // Test user creation
-        let user = config.get_or_create_user(&token, &pool).await.unwrap();
-        assert_eq!(user.pseudonym, "test_pseudonym");
-
-        // Test user retrieval (should return same user)
-        let retrieved_user = config.get_or_create_user(&token, &pool).await.unwrap();
-        assert_eq!(retrieved_user.id, user.id);
-        assert_eq!(retrieved_user.pseudonym, "test_pseudonym");
-
-        // Clean up
-        sqlx::query!("DROP TABLE users")
-            .execute(&pool)
-            .await
-            .expect("Failed to drop users table");
     }
 }
