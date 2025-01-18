@@ -151,29 +151,34 @@ impl Session {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlx::postgres::PgPoolOptions;
-    use std::env;
+    use crate::server::services::test_helpers::{get_test_pool, cleanup_test_data};
+    use sqlx::query;
 
-    async fn setup_test_db() -> PgPool {
-        let database_url = env::var("TEST_DATABASE_URL")
-            .expect("TEST_DATABASE_URL must be set");
-        
-        PgPoolOptions::new()
-            .max_connections(5)
-            .connect(&database_url)
-            .await
-            .expect("Failed to connect to test database")
+    async fn create_test_user(pool: &PgPool) -> Uuid {
+        query!(
+            r#"
+            INSERT INTO users (pseudonym)
+            VALUES ($1)
+            RETURNING id
+            "#,
+            "test_user",
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap()
+        .id
     }
 
     #[tokio::test]
     async fn test_session_lifecycle() {
-        let pool = setup_test_db().await;
+        let pool = get_test_pool().await;
+        cleanup_test_data(pool).await;
         
         // Create a test user
-        let user_id = Uuid::new_v4();
+        let user_id = create_test_user(pool).await;
         
         // Create session
-        let session = Session::create(user_id, &pool)
+        let session = Session::create(user_id, pool)
             .await
             .expect("Failed to create session");
         
@@ -181,7 +186,7 @@ mod tests {
         assert!(session.expires_at > Utc::now());
         
         // Validate session
-        let validated = Session::validate(&session.token, &pool)
+        let validated = Session::validate(&session.token, pool)
             .await
             .expect("Failed to validate session");
         
@@ -191,26 +196,29 @@ mod tests {
         // Refresh session
         let mut session = validated;
         let original_expiry = session.expires_at;
-        session.refresh(&pool)
+        session.refresh(pool)
             .await
             .expect("Failed to refresh session");
         
         assert!(session.expires_at > original_expiry);
         
         // Delete session
-        session.delete(&pool)
+        session.delete(pool)
             .await
             .expect("Failed to delete session");
         
         // Verify session is gone
-        let result = Session::validate(&session.token, &pool).await;
+        let result = Session::validate(&session.token, pool).await;
         assert!(matches!(result, Err(SessionError::NotFound)));
     }
 
     #[tokio::test]
     async fn test_expired_session() {
-        let pool = setup_test_db().await;
-        let user_id = Uuid::new_v4();
+        let pool = get_test_pool().await;
+        cleanup_test_data(pool).await;
+        
+        // Create a test user
+        let user_id = create_test_user(pool).await;
         
         // Create an expired session directly in the database
         let token = Session::generate_token().unwrap();
@@ -225,19 +233,50 @@ mod tests {
             token,
             expired_at,
         )
-        .execute(&pool)
+        .execute(pool)
         .await
         .expect("Failed to insert expired session");
         
         // Attempt to validate expired session
-        let result = Session::validate(&token, &pool).await;
+        let result = Session::validate(&token, pool).await;
         assert!(matches!(result, Err(SessionError::Expired)));
         
         // Clean up expired sessions
-        let cleaned = Session::cleanup_expired(&pool)
+        let cleaned = Session::cleanup_expired(pool)
             .await
             .expect("Failed to clean up expired sessions");
         
         assert!(cleaned > 0);
+    }
+
+    #[tokio::test]
+    async fn test_multiple_sessions() {
+        let pool = get_test_pool().await;
+        cleanup_test_data(pool).await;
+        
+        // Create test user
+        let user_id = create_test_user(pool).await;
+        
+        // Create multiple sessions for the same user
+        let session1 = Session::create(user_id, pool).await.unwrap();
+        let session2 = Session::create(user_id, pool).await.unwrap();
+        
+        // Validate both sessions work
+        let validated1 = Session::validate(&session1.token, pool).await.unwrap();
+        let validated2 = Session::validate(&session2.token, pool).await.unwrap();
+        
+        assert_eq!(validated1.user_id, user_id);
+        assert_eq!(validated2.user_id, user_id);
+        assert_ne!(validated1.id, validated2.id);
+        
+        // Delete one session
+        validated1.delete(pool).await.unwrap();
+        
+        // Verify only the deleted session is gone
+        let result1 = Session::validate(&session1.token, pool).await;
+        let result2 = Session::validate(&session2.token, pool).await;
+        
+        assert!(matches!(result1, Err(SessionError::NotFound)));
+        assert!(result2.is_ok());
     }
 }
