@@ -5,36 +5,40 @@ This document covers common patterns and fixes for working with extractors in Ax
 
 ## Common Issues
 
-### 1. FromRequestParts Lifetime Parameters
-When implementing `FromRequestParts`, you need to specify lifetime parameters correctly:
+### 1. FromRequestParts Implementation
+When implementing `FromRequestParts`, use the standard trait implementation:
 
 ```rust
-// ❌ Wrong
-async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection>
+#[async_trait]
+impl<S> FromRequestParts<S> for MyExtractor
+where
+    S: Send + Sync,
+{
+    type Rejection = MyError;
 
-// ✅ Correct
-async fn from_request_parts<'a, 'b>(parts: &'a mut Parts, state: &'b S) -> Result<Self, Self::Rejection>
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        // Implementation
+    }
+}
 ```
 
-### 2. State Management
-Use Extension instead of State for shared state:
+### 2. Handler Return Types
+Make sure handler return types implement all necessary traits:
 
 ```rust
 // ❌ Problematic
-pub async fn handler(
-    State(state): State<AppState>,
-    cookies: CookieJar,
-) -> impl IntoResponse
+pub async fn handler() -> impl IntoResponse {
+    // ...
+}
 
 // ✅ Better
-pub async fn handler(
-    Extension(state): Extension<AppState>,
-    cookies: CookieJar,
-) -> impl IntoResponse
+pub async fn handler() -> impl IntoResponse + Send + 'static {
+    // ...
+}
 ```
 
 ### 3. Router Configuration
-Use layer for Extension state:
+Use Extension for shared state:
 
 ```rust
 // ❌ Wrong
@@ -53,25 +57,22 @@ Keep handler signatures simple and consistent:
 pub async fn handler(
     Extension(state): Extension<AppState>,
     Query(params): Query<Params>,
-) -> impl IntoResponse
+) -> impl IntoResponse + Send + 'static
 ```
 
-### 2. FromRequestParts Implementation
-Proper implementation for custom extractors:
+### 2. State Management
+Use a single state type:
 
 ```rust
-#[async_trait]
-impl<S> FromRequestParts<S> for MyExtractor
-where
-    S: Send + Sync,
-{
-    type Rejection = MyError;
+#[derive(Clone)]
+pub struct AppState {
+    config: Config,
+    pool: PgPool,
+}
 
-    async fn from_request_parts<'a, 'b>(
-        parts: &'a mut Parts,
-        state: &'b S,
-    ) -> Result<Self, Self::Rejection> {
-        // Implementation
+impl AppState {
+    pub fn new(config: Config, pool: PgPool) -> Self {
+        Self { config, pool }
     }
 }
 ```
@@ -111,20 +112,15 @@ impl IntoResponse for MyError {
 }
 ```
 
-### 5. State Types
-When using multiple state types, combine them into a single type:
+### 5. Handler Bounds
+Make sure handlers have proper bounds:
 
 ```rust
-#[derive(Clone)]
-pub struct AppState {
-    config: Config,
-    pool: PgPool,
+pub async fn handler(
+    Extension(state): Extension<AppState>,
+) -> impl IntoResponse + Send + 'static {
+    // Implementation
 }
-
-// Then use in router
-let app = Router::new()
-    .route("/path", get(handler))
-    .layer(Extension(AppState::new(config, pool)));
 ```
 
 ## Testing
@@ -149,11 +145,11 @@ async fn test_handler() {
 
 ## Common Gotchas
 
-1. **Lifetime Parameters**: Always specify lifetimes in `FromRequestParts` implementations
-2. **State Access**: Use `parts.extensions.get()` to access state in extractors
+1. **Handler Bounds**: Always include `Send + 'static` for handler return types
+2. **State Access**: Use Extension instead of State for shared state
 3. **Cookie Handling**: Use the tuple form for cookie building
 4. **Handler Types**: Make sure handler return types implement `IntoResponse`
-5. **Extension vs State**: Prefer Extension for shared state
+5. **Router Configuration**: Use layer for Extension state
 
 ## Related Issues
 - Issue #562: OIDC Authentication Implementation
