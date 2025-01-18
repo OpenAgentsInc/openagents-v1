@@ -4,7 +4,7 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use axum_extra::extract::{cookie::{Cookie, SameSite}, CookieJar};
+use axum_extra::extract::cookie::{Cookie, SameSite, CookieJar};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use time::Duration;
@@ -86,10 +86,10 @@ pub async fn callback(
 #[axum::debug_handler]
 pub async fn logout(
     Extension(state): Extension<AppState>,
-    cookies: CookieJar,
+    jar: CookieJar,
 ) -> (StatusCode, HeaderMap) {
     // Get session token from cookie
-    if let Some(cookie) = cookies.get(SESSION_COOKIE_NAME) {
+    if let Some(cookie) = jar.get(SESSION_COOKIE_NAME) {
         // Try to find and delete session
         if let Ok(session) = Session::validate(cookie.value(), &state.pool).await {
             let _ = session.delete(&state.pool).await;
