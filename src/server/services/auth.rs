@@ -212,9 +212,52 @@ impl OIDCConfig {
 mod tests {
     use super::*;
     use wiremock::{MockServer, Mock, ResponseTemplate};
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::method;
     use serde_json::json;
     use sqlx::postgres::PgPoolOptions;
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
+
+    async fn setup_test_db() -> PgPool {
+        let pool = PgPoolOptions::new()
+            .max_connections(5)
+            .connect("postgres://postgres:password@localhost:5432/test_db")
+            .await
+            .expect("Failed to connect to database");
+
+        // Run migrations
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS users (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                pseudonym VARCHAR(255) NOT NULL UNIQUE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+
+            DROP TRIGGER IF EXISTS set_timestamp ON users;
+            
+            CREATE OR REPLACE FUNCTION trigger_set_timestamp()
+            RETURNS TRIGGER AS $$
+            BEGIN
+              NEW.updated_at = NOW();
+              RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+
+            CREATE TRIGGER set_timestamp
+                BEFORE UPDATE ON users
+                FOR EACH ROW
+                EXECUTE FUNCTION trigger_set_timestamp();
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("Failed to create users table");
+
+        pool
+    }
 
     #[test]
     fn test_oidc_config_validation() {
@@ -330,12 +373,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_user_creation_and_retrieval() {
-        // Create test database connection
-        let pool = PgPoolOptions::new()
-            .max_connections(5)
-            .connect("postgres://postgres:password@localhost:5432/test_db")
-            .await
-            .expect("Failed to connect to database");
+        // Initialize test database
+        let pool = setup_test_db().await;
 
         // Create test config
         let config = OIDCConfig::new(
@@ -370,5 +409,11 @@ mod tests {
         let retrieved_user = config.get_or_create_user(&token, &pool).await.unwrap();
         assert_eq!(retrieved_user.id, user.id);
         assert_eq!(retrieved_user.pseudonym, "test_pseudonym");
+
+        // Clean up
+        sqlx::query!("DROP TABLE users")
+            .execute(&pool)
+            .await
+            .expect("Failed to drop users table");
     }
 }
