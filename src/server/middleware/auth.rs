@@ -51,16 +51,10 @@ struct ErrorResponse {
 impl<S> FromRequestParts<S> for AuthenticatedUser
 where
     S: Send + Sync,
-    AppState: FromRequestParts<S>,
 {
     type Rejection = AuthError;
 
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        // Get the app state
-        let app_state = AppState::from_request_parts(parts, state)
-            .await
-            .map_err(|_| AuthError::NotAuthenticated)?;
-
+    async fn from_request_parts<'a>(parts: &'a mut Parts, state: &'a S) -> Result<Self, Self::Rejection> {
         // Get cookies from the request
         let cookies = CookieJar::from_headers(&parts.headers);
 
@@ -70,6 +64,10 @@ where
             .ok_or(AuthError::NotAuthenticated)?
             .value()
             .to_string();
+
+        // Get app state
+        let app_state = parts.extensions.get::<AppState>()
+            .ok_or(AuthError::NotAuthenticated)?;
 
         // Validate session
         let session = Session::validate(&session_token, &app_state.pool)
@@ -97,14 +95,16 @@ mod tests {
     use crate::server::services::test_helpers::{get_test_pool, cleanup_test_data, setup_test_db};
     use axum::{
         body::Body,
-        http::{Request, StatusCode},
+        http::Request,
         response::IntoResponse,
         routing::get,
         Router,
+        debug_handler,
     };
     use axum_extra::extract::cookie::Cookie;
     use tower::ServiceExt;
 
+    #[debug_handler(state = AppState)]
     async fn test_handler(user: AuthenticatedUser) -> impl IntoResponse {
         Json(user.user)
     }
