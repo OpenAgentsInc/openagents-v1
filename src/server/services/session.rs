@@ -1,9 +1,10 @@
 use axum::http::StatusCode;
 use chrono::{DateTime, Duration, Utc};
 use rand::Rng;
-use serde::{Deserialize, Serialize};
+use serde::{Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
+use time::OffsetDateTime;
 
 #[derive(Debug, thiserror::Error, Clone)]
 pub enum SessionError {
@@ -61,13 +62,22 @@ impl Session {
         Ok(token)
     }
 
+    fn to_offset_datetime(dt: DateTime<Utc>) -> OffsetDateTime {
+        OffsetDateTime::from_unix_timestamp(dt.timestamp()).unwrap()
+    }
+
+    fn from_offset_datetime(odt: OffsetDateTime) -> DateTime<Utc> {
+        DateTime::from_timestamp(odt.unix_timestamp(), 0).unwrap()
+    }
+
     /// Create a new session for a user
     pub async fn create(user_id: Uuid, pool: &PgPool) -> Result<Self, SessionError> {
         let token = Self::generate_token()?;
         let expires_at = Utc::now() + Duration::hours(24); // 24 hour expiry
 
-        let session = sqlx::query_as!(
-            Session,
+        let expires_at_offset = Self::to_offset_datetime(expires_at);
+
+        let row = sqlx::query!(
             r#"
             INSERT INTO sessions (user_id, token, expires_at)
             VALUES ($1, $2, $3)
@@ -75,18 +85,24 @@ impl Session {
             "#,
             user_id,
             token,
-            expires_at,
+            expires_at_offset,
         )
         .fetch_one(pool)
         .await?;
 
-        Ok(session)
+        Ok(Session {
+            id: row.id,
+            user_id: row.user_id,
+            token: row.token,
+            expires_at: Self::from_offset_datetime(row.expires_at),
+            created_at: Self::from_offset_datetime(row.created_at),
+            updated_at: Self::from_offset_datetime(row.updated_at),
+        })
     }
 
     /// Validate a session token and return the session if valid
     pub async fn validate(token: &str, pool: &PgPool) -> Result<Self, SessionError> {
-        let session = sqlx::query_as!(
-            Session,
+        let row = sqlx::query!(
             r#"
             SELECT id, user_id, token, expires_at, created_at, updated_at
             FROM sessions
@@ -97,6 +113,15 @@ impl Session {
         .fetch_optional(pool)
         .await?
         .ok_or(SessionError::NotFound)?;
+
+        let session = Session {
+            id: row.id,
+            user_id: row.user_id,
+            token: row.token,
+            expires_at: Self::from_offset_datetime(row.expires_at),
+            created_at: Self::from_offset_datetime(row.created_at),
+            updated_at: Self::from_offset_datetime(row.updated_at),
+        };
 
         if session.expires_at < Utc::now() {
             return Err(SessionError::Expired);
@@ -110,14 +135,17 @@ impl Session {
         self.expires_at = Utc::now() + Duration::hours(24);
         self.updated_at = Utc::now();
 
+        let expires_at_offset = Self::to_offset_datetime(self.expires_at);
+        let updated_at_offset = Self::to_offset_datetime(self.updated_at);
+
         sqlx::query!(
             r#"
             UPDATE sessions
             SET expires_at = $1, updated_at = $2
             WHERE id = $3
             "#,
-            self.expires_at,
-            self.updated_at,
+            expires_at_offset,
+            updated_at_offset,
             self.id,
         )
         .execute(pool)
@@ -143,12 +171,14 @@ impl Session {
 
     /// Clean up expired sessions
     pub async fn cleanup_expired(pool: &PgPool) -> Result<u64, SessionError> {
+        let now = Self::to_offset_datetime(Utc::now());
+
         let result = sqlx::query!(
             r#"
             DELETE FROM sessions
             WHERE expires_at < $1
             "#,
-            Utc::now(),
+            now,
         )
         .execute(pool)
         .await?;
@@ -232,6 +262,7 @@ mod tests {
         // Create an expired session directly in the database
         let token = Session::generate_token().unwrap();
         let expired_at = Utc::now() - Duration::hours(1);
+        let expired_at_offset = Session::to_offset_datetime(expired_at);
         
         sqlx::query!(
             r#"
@@ -240,7 +271,7 @@ mod tests {
             "#,
             user_id,
             token,
-            expired_at,
+            expired_at_offset,
         )
         .execute(pool)
         .await
