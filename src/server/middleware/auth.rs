@@ -1,12 +1,12 @@
 use axum::{
-    extract::FromRequestParts,
+    async_trait,
+    extract::{FromRequestParts, Extension},
     http::{request::Parts, StatusCode},
     response::IntoResponse,
     Json,
 };
 use axum_extra::extract::CookieJar;
 use serde::Serialize;
-use sqlx::PgPool;
 
 use crate::server::services::{session::{Session, SessionError}, auth::User};
 use crate::server::handlers::auth::AppState;
@@ -47,14 +47,14 @@ struct ErrorResponse {
     error: String,
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl<S> FromRequestParts<S> for AuthenticatedUser
 where
     S: Send + Sync,
 {
     type Rejection = AuthError;
 
-    async fn from_request_parts<'a>(parts: &'a mut Parts, state: &'a S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         // Get cookies from the request
         let cookies = CookieJar::from_headers(&parts.headers);
 
@@ -66,11 +66,11 @@ where
             .to_string();
 
         // Get app state
-        let app_state = parts.extensions.get::<AppState>()
+        let state = parts.extensions.get::<AppState>()
             .ok_or(AuthError::NotAuthenticated)?;
 
         // Validate session
-        let session = Session::validate(&session_token, &app_state.pool)
+        let session = Session::validate(&session_token, &state.pool)
             .await
             .map_err(AuthError::SessionError)?;
 
@@ -80,7 +80,7 @@ where
             "SELECT id, pseudonym FROM users WHERE id = $1",
             session.user_id
         )
-        .fetch_optional(&app_state.pool)
+        .fetch_optional(&state.pool)
         .await
         .map_err(|e| AuthError::SessionError(SessionError::Database(e.to_string())))?
         .ok_or(AuthError::NotAuthenticated)?;
@@ -99,13 +99,13 @@ mod tests {
         response::IntoResponse,
         routing::get,
         Router,
-        debug_handler,
     };
     use axum_extra::extract::cookie::Cookie;
     use tower::ServiceExt;
 
-    #[debug_handler(state = AppState)]
-    async fn test_handler(user: AuthenticatedUser) -> impl IntoResponse {
+    async fn test_handler(
+        user: AuthenticatedUser,
+    ) -> impl IntoResponse {
         Json(user.user)
     }
 
@@ -148,7 +148,7 @@ mod tests {
         // Create test app
         let app = Router::new()
             .route("/test", get(test_handler))
-            .with_state(state);
+            .layer(Extension(state));
 
         // Test without session cookie
         let response = app
