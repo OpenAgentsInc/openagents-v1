@@ -42,6 +42,7 @@ impl AppState {
     }
 }
 
+#[axum::debug_handler]
 pub async fn login(
     Extension(state): Extension<AppState>,
 ) -> impl IntoResponse + Send + 'static {
@@ -49,10 +50,11 @@ pub async fn login(
     Json(LoginResponse { url: auth_url })
 }
 
+#[axum::debug_handler]
 pub async fn callback(
     Extension(state): Extension<AppState>,
     Query(params): Query<CallbackParams>,
-) -> Result<impl IntoResponse + Send + 'static, impl IntoResponse + Send + 'static> {
+) -> Result<(HeaderMap, Json<AuthResponse>), (StatusCode, Json<ErrorResponse>)> {
     // Exchange code for tokens and create session
     let auth_response = state.config.authenticate(params.code, &state.pool)
         .await
@@ -81,10 +83,11 @@ pub async fn callback(
     Ok((headers, Json(auth_response)))
 }
 
+#[axum::debug_handler]
 pub async fn logout(
     Extension(state): Extension<AppState>,
     cookies: CookieJar,
-) -> impl IntoResponse + Send + 'static {
+) -> (StatusCode, HeaderMap) {
     // Get session token from cookie
     if let Some(cookie) = cookies.get(SESSION_COOKIE_NAME) {
         // Try to find and delete session
