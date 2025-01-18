@@ -1,14 +1,15 @@
 use axum::{
-    extract::{FromRequestParts, State},
+    extract::FromRequestParts,
     http::{request::Parts, StatusCode},
-    response::{IntoResponse, Response},
+    response::IntoResponse,
+    Json,
     RequestPartsExt,
 };
 use axum_extra::extract::CookieJar;
 use serde::Serialize;
 use sqlx::PgPool;
 
-use crate::server::services::{Session, SessionError, User};
+use crate::server::services::{session::{Session, SessionError}, auth::User};
 
 const SESSION_COOKIE_NAME: &str = "session";
 
@@ -27,7 +28,7 @@ pub enum AuthError {
 }
 
 impl IntoResponse for AuthError {
-    fn into_response(self) -> Response {
+    fn into_response(self) -> axum::response::Response {
         let status = match self {
             AuthError::NotAuthenticated => StatusCode::UNAUTHORIZED,
             AuthError::SessionError(e) => e.into(),
@@ -45,9 +46,6 @@ impl IntoResponse for AuthError {
 struct ErrorResponse {
     error: String,
 }
-
-#[derive(Serialize)]
-struct Json<T>(T);
 
 #[async_trait::async_trait]
 impl<S> FromRequestParts<S> for AuthenticatedUser
@@ -102,7 +100,6 @@ mod tests {
     use crate::server::services::test_helpers::{get_test_pool, cleanup_test_data, setup_test_db};
     use axum::{
         body::Body,
-        extract::State,
         http::{Request, StatusCode},
         response::IntoResponse,
         routing::get,
