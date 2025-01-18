@@ -60,7 +60,7 @@ impl IntoResponse for AuthError {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OIDCConfig {
     client_id: String,
     client_secret: String,
