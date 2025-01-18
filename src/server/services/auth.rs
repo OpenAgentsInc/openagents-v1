@@ -4,15 +4,24 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
+use std::fmt::{self, Display};
 
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum AuthError {
-    #[error("Invalid OIDC configuration")]
     InvalidConfig,
-    #[error("Authentication failed")]
     AuthenticationFailed,
 }
+
+impl Display for AuthError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AuthError::InvalidConfig => write!(f, "Invalid OIDC configuration"),
+            AuthError::AuthenticationFailed => write!(f, "Authentication failed"),
+        }
+    }
+}
+
+impl std::error::Error for AuthError {}
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> axum::response::Response {
