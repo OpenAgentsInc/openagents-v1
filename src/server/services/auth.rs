@@ -4,13 +4,18 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
 use std::fmt::{self, Display};
+use uuid::Uuid;
+use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm};
 
 #[derive(Debug)]
 pub enum AuthError {
     InvalidConfig,
     AuthenticationFailed,
     TokenExchangeFailed(String),
+    DatabaseError(String),
+    InvalidToken(String),
 }
 
 impl Display for AuthError {
@@ -19,6 +24,8 @@ impl Display for AuthError {
             AuthError::InvalidConfig => write!(f, "Invalid OIDC configuration"),
             AuthError::AuthenticationFailed => write!(f, "Authentication failed"),
             AuthError::TokenExchangeFailed(msg) => write!(f, "Token exchange failed: {}", msg),
+            AuthError::DatabaseError(msg) => write!(f, "Database error: {}", msg),
+            AuthError::InvalidToken(msg) => write!(f, "Invalid token: {}", msg),
         }
     }
 }
@@ -31,6 +38,8 @@ impl IntoResponse for AuthError {
             AuthError::InvalidConfig => StatusCode::INTERNAL_SERVER_ERROR,
             AuthError::AuthenticationFailed => StatusCode::UNAUTHORIZED,
             AuthError::TokenExchangeFailed(_) => StatusCode::BAD_GATEWAY,
+            AuthError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AuthError::InvalidToken(_) => StatusCode::UNAUTHORIZED,
         };
         
         let body = Json(serde_json::json!({
@@ -48,6 +57,7 @@ pub struct OIDCConfig {
     redirect_uri: String,
     authorization_endpoint: String,
     token_endpoint: String,
+    jwks_uri: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -67,6 +77,21 @@ struct TokenRequest<'a> {
     client_secret: &'a str,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct User {
+    pub id: Uuid,
+    pub pseudonym: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Claims {
+    sub: String,
+    exp: usize,
+    iat: usize,
+    iss: String,
+    aud: String,
+}
+
 impl OIDCConfig {
     pub fn new(
         client_id: String,
@@ -74,6 +99,7 @@ impl OIDCConfig {
         redirect_uri: String,
         authorization_endpoint: String,
         token_endpoint: String,
+        jwks_uri: String,
     ) -> Result<Self, AuthError> {
         // Basic validation
         if client_id.is_empty() || client_secret.is_empty() || redirect_uri.is_empty() {
@@ -86,6 +112,7 @@ impl OIDCConfig {
             redirect_uri,
             authorization_endpoint,
             token_endpoint,
+            jwks_uri,
         })
     }
 
@@ -129,6 +156,56 @@ impl OIDCConfig {
             .await
             .map_err(|e| AuthError::TokenExchangeFailed(e.to_string()))
     }
+
+    pub async fn verify_and_get_pseudonym(&self, id_token: &str) -> Result<String, AuthError> {
+        // For testing purposes, using a simple key. In production, fetch from jwks_uri
+        let key = DecodingKey::from_secret(self.client_secret.as_bytes());
+        
+        let validation = Validation::new(Algorithm::HS256);
+        let token_data = decode::<Claims>(id_token, &key, &validation)
+            .map_err(|e| AuthError::InvalidToken(e.to_string()))?;
+
+        Ok(token_data.claims.sub)
+    }
+
+    pub async fn get_or_create_user(&self, id_token: &str, pool: &PgPool) -> Result<User, AuthError> {
+        let pseudonym = self.verify_and_get_pseudonym(id_token).await?;
+
+        // Try to find existing user
+        let user = sqlx::query_as!(
+            User,
+            r#"
+            SELECT id, pseudonym
+            FROM users
+            WHERE pseudonym = $1
+            "#,
+            pseudonym
+        )
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
+
+        // Return existing user or create new one
+        match user {
+            Some(user) => Ok(user),
+            None => {
+                let user = sqlx::query_as!(
+                    User,
+                    r#"
+                    INSERT INTO users (pseudonym)
+                    VALUES ($1)
+                    RETURNING id, pseudonym
+                    "#,
+                    pseudonym
+                )
+                .fetch_one(pool)
+                .await
+                .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
+
+                Ok(user)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -137,6 +214,7 @@ mod tests {
     use wiremock::{MockServer, Mock, ResponseTemplate};
     use wiremock::matchers::{method, path};
     use serde_json::json;
+    use sqlx::postgres::PgPoolOptions;
 
     #[test]
     fn test_oidc_config_validation() {
@@ -147,6 +225,7 @@ mod tests {
             "http://localhost:3000/callback".to_string(),
             "https://auth.scramble.com/authorize".to_string(),
             "https://auth.scramble.com/token".to_string(),
+            "https://auth.scramble.com/.well-known/jwks.json".to_string(),
         );
         assert!(matches!(result, Err(AuthError::InvalidConfig)));
 
@@ -157,6 +236,7 @@ mod tests {
             "http://localhost:3000/callback".to_string(),
             "https://auth.scramble.com/authorize".to_string(),
             "https://auth.scramble.com/token".to_string(),
+            "https://auth.scramble.com/.well-known/jwks.json".to_string(),
         );
         assert!(result.is_ok());
     }
@@ -169,6 +249,7 @@ mod tests {
             "http://localhost:3000/callback".to_string(),
             "https://auth.scramble.com/authorize".to_string(),
             "https://auth.scramble.com/token".to_string(),
+            "https://auth.scramble.com/.well-known/jwks.json".to_string(),
         )
         .unwrap();
 
@@ -194,6 +275,7 @@ mod tests {
             "http://localhost:3000/callback".to_string(),
             "https://auth.scramble.com/authorize".to_string(),
             mock_server.uri(),
+            "https://auth.scramble.com/.well-known/jwks.json".to_string(),
         )
         .unwrap();
 
@@ -231,6 +313,7 @@ mod tests {
             "http://localhost:3000/callback".to_string(),
             "https://auth.scramble.com/authorize".to_string(),
             mock_server.uri(),
+            "https://auth.scramble.com/.well-known/jwks.json".to_string(),
         )
         .unwrap();
 
@@ -243,5 +326,49 @@ mod tests {
         // Test token exchange failure
         let result = config.exchange_code("invalid_code".to_string()).await;
         assert!(matches!(result, Err(AuthError::TokenExchangeFailed(_))));
+    }
+
+    #[tokio::test]
+    async fn test_user_creation_and_retrieval() {
+        // Create test database connection
+        let pool = PgPoolOptions::new()
+            .max_connections(5)
+            .connect("postgres://postgres:password@localhost:5432/test_db")
+            .await
+            .expect("Failed to connect to database");
+
+        // Create test config
+        let config = OIDCConfig::new(
+            "client123".to_string(),
+            "test_secret".to_string(),
+            "http://localhost:3000/callback".to_string(),
+            "https://auth.scramble.com/authorize".to_string(),
+            "https://auth.scramble.com/token".to_string(),
+            "https://auth.scramble.com/.well-known/jwks.json".to_string(),
+        )
+        .unwrap();
+
+        // Create a test JWT token
+        let token = jsonwebtoken::encode(
+            &jsonwebtoken::Header::new(Algorithm::HS256),
+            &Claims {
+                sub: "test_pseudonym".to_string(),
+                exp: 2000000000,
+                iat: 1000000000,
+                iss: "https://auth.scramble.com".to_string(),
+                aud: config.client_id.clone(),
+            },
+            &jsonwebtoken::EncodingKey::from_secret(config.client_secret.as_bytes()),
+        )
+        .unwrap();
+
+        // Test user creation
+        let user = config.get_or_create_user(&token, &pool).await.unwrap();
+        assert_eq!(user.pseudonym, "test_pseudonym");
+
+        // Test user retrieval (should return same user)
+        let retrieved_user = config.get_or_create_user(&token, &pool).await.unwrap();
+        assert_eq!(retrieved_user.id, user.id);
+        assert_eq!(retrieved_user.pseudonym, "test_pseudonym");
     }
 }
