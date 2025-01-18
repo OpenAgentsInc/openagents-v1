@@ -31,7 +31,7 @@ struct LoginResponse {
     url: String,
 }
 
-#[debug_handler]
+#[debug_handler(state = (OIDCConfig))]
 pub async fn login(
     State(config): State<OIDCConfig>,
 ) -> impl IntoResponse {
@@ -40,7 +40,7 @@ pub async fn login(
     Json(LoginResponse { url: auth_url })
 }
 
-#[debug_handler]
+#[debug_handler(state = (OIDCConfig, PgPool))]
 pub async fn callback(
     State(config): State<OIDCConfig>,
     State(pool): State<PgPool>,
@@ -60,13 +60,12 @@ pub async fn callback(
         })?;
 
     // Create session cookie
-    let cookie = Cookie::build(SESSION_COOKIE_NAME)
+    let cookie = Cookie::build((SESSION_COOKIE_NAME, auth_response.session_token.clone()))
         .path("/")
         .secure(true)
         .http_only(true)
         .same_site(SameSite::Lax)
         .max_age(Duration::days(SESSION_DURATION_DAYS))
-        .value(auth_response.session_token.clone())
         .build();
 
     // Return success response with cookie
@@ -76,7 +75,7 @@ pub async fn callback(
     Ok((headers, Json(auth_response)))
 }
 
-#[debug_handler]
+#[debug_handler(state = (PgPool))]
 pub async fn logout(
     State(pool): State<PgPool>,
     cookies: CookieJar,
@@ -90,13 +89,12 @@ pub async fn logout(
     }
 
     // Remove session cookie
-    let removal_cookie = Cookie::build(SESSION_COOKIE_NAME)
+    let removal_cookie = Cookie::build((SESSION_COOKIE_NAME, ""))
         .path("/")
         .secure(true)
         .http_only(true)
         .same_site(SameSite::Lax)
         .max_age(Duration::seconds(0))
-        .value("")
         .build();
 
     let mut headers = HeaderMap::new();
@@ -152,13 +150,12 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        // Create test app
+        // Create test app with combined state
         let app = Router::new()
             .route("/login", get(login))
             .route("/callback", get(callback))
             .route("/logout", post(logout))
-            .with_state(config)
-            .with_state(pool.clone());
+            .with_state((config, pool.clone()));
 
         // Test login endpoint
         let response = app
