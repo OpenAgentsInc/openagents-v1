@@ -3,7 +3,7 @@ use axum::{
     http::{header::SET_COOKIE, HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
-    debug_handler,
+    Extension,
 };
 use axum_extra::extract::{cookie::{Cookie, SameSite}, CookieJar};
 use serde::{Deserialize, Serialize};
@@ -43,17 +43,15 @@ impl AppState {
     }
 }
 
-#[debug_handler(state = AppState)]
 pub async fn login(
-    State(state): State<AppState>,
+    Extension(state): Extension<AppState>,
 ) -> impl IntoResponse {
     let auth_url = state.config.authorization_url();
     Json(LoginResponse { url: auth_url })
 }
 
-#[debug_handler(state = AppState)]
 pub async fn callback(
-    State(state): State<AppState>,
+    Extension(state): Extension<AppState>,
     cookies: CookieJar,
     Query(params): Query<CallbackParams>,
 ) -> Result<(HeaderMap, Json<AuthResponse>), (StatusCode, Json<ErrorResponse>)> {
@@ -85,9 +83,8 @@ pub async fn callback(
     Ok((headers, Json(auth_response)))
 }
 
-#[debug_handler(state = AppState)]
 pub async fn logout(
-    State(state): State<AppState>,
+    Extension(state): Extension<AppState>,
     cookies: CookieJar,
 ) -> impl IntoResponse {
     // Get session token from cookie
@@ -168,7 +165,7 @@ mod tests {
             .route("/login", get(login))
             .route("/callback", get(callback))
             .route("/logout", post(logout))
-            .with_state(state);
+            .layer(Extension(state));
 
         // Test login endpoint
         let response = app
