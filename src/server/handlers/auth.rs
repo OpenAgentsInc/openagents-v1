@@ -3,14 +3,13 @@ use axum::{
     http::{header::SET_COOKIE, HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
-    handler::Handler,
 };
 use axum_extra::extract::{cookie::{Cookie, SameSite}, CookieJar};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use time::Duration;
 
-use crate::server::services::{auth::{OIDCConfig}, session::Session};
+use crate::server::services::{auth::{OIDCConfig, AuthResponse}, session::Session};
 
 const SESSION_COOKIE_NAME: &str = "session";
 const SESSION_DURATION_DAYS: i64 = 7;
@@ -45,7 +44,7 @@ impl AppState {
 
 pub async fn login(
     Extension(state): Extension<AppState>,
-) -> impl IntoResponse {
+) -> impl IntoResponse + Send + 'static {
     let auth_url = state.config.authorization_url();
     Json(LoginResponse { url: auth_url })
 }
@@ -53,7 +52,7 @@ pub async fn login(
 pub async fn callback(
     Extension(state): Extension<AppState>,
     Query(params): Query<CallbackParams>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<(HeaderMap, Json<AuthResponse>), (StatusCode, Json<ErrorResponse>)> {
     // Exchange code for tokens and create session
     let auth_response = state.config.authenticate(params.code, &state.pool)
         .await
