@@ -55,10 +55,10 @@ where
 {
     type Rejection = AuthError;
 
-    fn from_request_parts<'a>(
+    fn from_request_parts<'a, 'b>(
         parts: &'a mut Parts,
-        state: &'a S,
-    ) -> Pin<Box<dyn Future<Output = Result<Self, Self::Rejection>> + Send + 'a>> {
+        state: &'b S,
+    ) -> Pin<Box<dyn Future<Output = Result<Self, Self::Rejection>> + Send + 'b>> {
         Box::pin(async move {
             // Get cookies from the request
             let cookies = CookieJar::from_headers(&parts.headers);
