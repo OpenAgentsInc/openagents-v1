@@ -84,7 +84,7 @@ pub async fn callback(
 pub async fn logout(
     Extension(state): Extension<AppState>,
     cookies: CookieJar,
-) -> impl IntoResponse + Send + 'static {
+) -> (StatusCode, HeaderMap) {
     // Get session token from cookie
     if let Some(cookie) = cookies.get(SESSION_COOKIE_NAME) {
         // Try to find and delete session
