@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use time::Duration;
 
-use crate::server::services::{auth::{OIDCConfig}, session::Session};
+use crate::server::services::{auth::{OIDCConfig, AuthResponse}, session::Session};
 
 const SESSION_COOKIE_NAME: &str = "session";
 const SESSION_DURATION_DAYS: i64 = 7;
@@ -43,7 +43,6 @@ impl AppState {
     }
 }
 
-#[debug_handler]
 pub async fn login(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
@@ -51,12 +50,11 @@ pub async fn login(
     Json(LoginResponse { url: auth_url })
 }
 
-#[debug_handler]
 pub async fn callback(
     State(state): State<AppState>,
     cookies: CookieJar,
     Query(params): Query<CallbackParams>,
-) -> Result<(HeaderMap, Json<serde_json::Value>), (StatusCode, Json<ErrorResponse>)> {
+) -> Result<(HeaderMap, Json<AuthResponse>), (StatusCode, Json<ErrorResponse>)> {
     // Exchange code for tokens and create session
     let auth_response = state.config.authenticate(params.code, &state.pool)
         .await
@@ -85,7 +83,6 @@ pub async fn callback(
     Ok((headers, Json(auth_response)))
 }
 
-#[debug_handler]
 pub async fn logout(
     State(state): State<AppState>,
     cookies: CookieJar,
