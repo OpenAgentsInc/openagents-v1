@@ -1,10 +1,10 @@
 use axum::{
-    async_trait,
     extract::{FromRequestParts, Extension},
     http::{request::Parts, StatusCode},
     response::IntoResponse,
     Json,
 };
+use async_trait::async_trait;
 use axum_extra::extract::CookieJar;
 use serde::Serialize;
 
