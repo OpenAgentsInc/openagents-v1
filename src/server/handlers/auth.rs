@@ -3,6 +3,7 @@ use axum::{
     http::{header::SET_COOKIE, HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
+    handler::Handler,
 };
 use axum_extra::extract::{cookie::{Cookie, SameSite}, CookieJar};
 use serde::{Deserialize, Serialize};
@@ -84,7 +85,7 @@ pub async fn callback(
 pub async fn logout(
     Extension(state): Extension<AppState>,
     cookies: CookieJar,
-) -> impl IntoResponse {
+) -> impl IntoResponse + Send + 'static {
     // Get session token from cookie
     if let Some(cookie) = cookies.get(SESSION_COOKIE_NAME) {
         // Try to find and delete session
