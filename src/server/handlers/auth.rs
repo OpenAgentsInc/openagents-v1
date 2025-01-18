@@ -3,13 +3,14 @@ use axum::{
     http::{header::SET_COOKIE, HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
+    debug_handler,
 };
 use axum_extra::extract::{cookie::{Cookie, SameSite}, CookieJar};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use time::Duration;
 
-use crate::server::services::{auth::{OIDCConfig, AuthResponse}, session::Session};
+use crate::server::services::{auth::{OIDCConfig}, session::Session};
 
 const SESSION_COOKIE_NAME: &str = "session";
 const SESSION_DURATION_DAYS: i64 = 7;
@@ -30,6 +31,7 @@ struct LoginResponse {
     url: String,
 }
 
+#[debug_handler]
 pub async fn login(
     State(config): State<OIDCConfig>,
 ) -> impl IntoResponse {
@@ -38,6 +40,7 @@ pub async fn login(
     Json(LoginResponse { url: auth_url })
 }
 
+#[debug_handler]
 pub async fn callback(
     cookies: CookieJar,
     State(config): State<OIDCConfig>,
@@ -58,12 +61,12 @@ pub async fn callback(
 
     // Create session cookie
     let cookie = Cookie::build(SESSION_COOKIE_NAME)
-        .value(auth_response.session_token.clone())
         .path("/")
         .secure(true)
         .http_only(true)
         .same_site(SameSite::Lax)
         .max_age(Duration::days(SESSION_DURATION_DAYS))
+        .value(auth_response.session_token.clone())
         .build();
 
     // Return success response with cookie
@@ -73,6 +76,7 @@ pub async fn callback(
     Ok((headers, Json(auth_response)))
 }
 
+#[debug_handler]
 pub async fn logout(
     cookies: CookieJar,
     State(pool): State<PgPool>,
@@ -87,12 +91,12 @@ pub async fn logout(
 
     // Remove session cookie
     let removal_cookie = Cookie::build(SESSION_COOKIE_NAME)
-        .value("")
         .path("/")
         .secure(true)
         .http_only(true)
         .same_site(SameSite::Lax)
         .max_age(Duration::seconds(0))
+        .value("")
         .build();
 
     let mut headers = HeaderMap::new();
