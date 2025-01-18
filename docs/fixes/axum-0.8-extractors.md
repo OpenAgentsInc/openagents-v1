@@ -5,15 +5,15 @@ This document covers common patterns and fixes for working with extractors in Ax
 
 ## Common Issues
 
-### 1. Async Trait Import
-When implementing `FromRequestParts`, use the correct async_trait import:
+### 1. FromRequestParts Lifetime Parameters
+When implementing `FromRequestParts`, you need to specify lifetime parameters correctly:
 
 ```rust
 // ❌ Wrong
-use axum::async_trait;
+async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection>
 
 // ✅ Correct
-use async_trait::async_trait;
+async fn from_request_parts<'a, 'b>(parts: &'a mut Parts, state: &'b S) -> Result<Self, Self::Rejection>
 ```
 
 ### 2. State Management
@@ -67,9 +67,9 @@ where
 {
     type Rejection = MyError;
 
-    async fn from_request_parts(
-        parts: &mut Parts,
-        _state: &S,
+    async fn from_request_parts<'a, 'b>(
+        parts: &'a mut Parts,
+        state: &'b S,
     ) -> Result<Self, Self::Rejection> {
         // Implementation
     }
@@ -111,6 +111,22 @@ impl IntoResponse for MyError {
 }
 ```
 
+### 5. State Types
+When using multiple state types, combine them into a single type:
+
+```rust
+#[derive(Clone)]
+pub struct AppState {
+    config: Config,
+    pool: PgPool,
+}
+
+// Then use in router
+let app = Router::new()
+    .route("/path", get(handler))
+    .layer(Extension(AppState::new(config, pool)));
+```
+
 ## Testing
 
 When testing handlers with state:
@@ -130,6 +146,14 @@ async fn test_handler() {
         .unwrap();
 }
 ```
+
+## Common Gotchas
+
+1. **Lifetime Parameters**: Always specify lifetimes in `FromRequestParts` implementations
+2. **State Access**: Use `parts.extensions.get()` to access state in extractors
+3. **Cookie Handling**: Use the tuple form for cookie building
+4. **Handler Types**: Make sure handler return types implement `IntoResponse`
+5. **Extension vs State**: Prefer Extension for shared state
 
 ## Related Issues
 - Issue #562: OIDC Authentication Implementation
