@@ -54,7 +54,10 @@ where
 {
     type Rejection = AuthError;
 
-    async fn from_request_parts<'a, 'b>(parts: &'a mut Parts, _state: &'b S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts<'a>(
+        parts: &'a mut Parts,
+        _state: &'a S,
+    ) -> Result<Self, Self::Rejection> {
         // Get cookies from the request
         let cookies = CookieJar::from_headers(&parts.headers);
 
@@ -105,7 +108,7 @@ mod tests {
 
     async fn test_handler(
         user: AuthenticatedUser,
-    ) -> impl IntoResponse {
+    ) -> impl IntoResponse + Send + 'static {
         Json(user.user)
     }
 
