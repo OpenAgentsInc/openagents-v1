@@ -5,7 +5,7 @@ use axum::{
     Json,
 };
 use async_trait::async_trait;
-use axum_extra::extract::CookieJar;
+use axum_extra::extract::cookie::CookieJar;
 use serde::Serialize;
 
 use crate::server::services::{session::{Session, SessionError}, auth::User};
@@ -54,7 +54,11 @@ where
 {
     type Rejection = AuthError;
 
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+    #[allow(unused_mut)]
+    async fn from_request_parts<'a>(
+        mut parts: &'a mut Parts,
+        state: &'a S,
+    ) -> Result<Self, Self::Rejection> {
         // Get cookies from the request
         let cookies = CookieJar::from_headers(&parts.headers);
 
