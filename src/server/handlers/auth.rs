@@ -33,8 +33,8 @@ struct LoginResponse {
 
 #[derive(Clone)]
 pub struct AppState {
-    config: OIDCConfig,
-    pool: PgPool,
+    pub config: OIDCConfig,
+    pub pool: PgPool,
 }
 
 impl AppState {
@@ -43,6 +43,7 @@ impl AppState {
     }
 }
 
+#[debug_handler(state = AppState)]
 pub async fn login(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
@@ -50,6 +51,7 @@ pub async fn login(
     Json(LoginResponse { url: auth_url })
 }
 
+#[debug_handler(state = AppState)]
 pub async fn callback(
     State(state): State<AppState>,
     cookies: CookieJar,
@@ -83,6 +85,7 @@ pub async fn callback(
     Ok((headers, Json(auth_response)))
 }
 
+#[debug_handler(state = AppState)]
 pub async fn logout(
     State(state): State<AppState>,
     cookies: CookieJar,
