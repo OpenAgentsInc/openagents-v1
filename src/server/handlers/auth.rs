@@ -1,9 +1,8 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Query, Extension},
     http::{header::SET_COOKIE, HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
-    Extension,
 };
 use axum_extra::extract::{cookie::{Cookie, SameSite}, CookieJar};
 use serde::{Deserialize, Serialize};
@@ -52,9 +51,8 @@ pub async fn login(
 
 pub async fn callback(
     Extension(state): Extension<AppState>,
-    cookies: CookieJar,
     Query(params): Query<CallbackParams>,
-) -> Result<(HeaderMap, Json<AuthResponse>), (StatusCode, Json<ErrorResponse>)> {
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
     // Exchange code for tokens and create session
     let auth_response = state.config.authenticate(params.code, &state.pool)
         .await
