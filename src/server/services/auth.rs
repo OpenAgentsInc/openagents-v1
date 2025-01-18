@@ -118,11 +118,12 @@ mod tests {
         .unwrap();
 
         let auth_url = config.authorization_url();
+        let encoded_callback = urlencoding::encode("http://localhost:3000/callback").into_owned();
         
         assert!(auth_url.starts_with("https://auth.scramble.com/authorize"));
         assert!(auth_url.contains("client_id=client123"));
         assert!(auth_url.contains("response_type=code"));
         assert!(auth_url.contains("scope=openid"));
-        assert!(auth_url.contains(&urlencoding::encode("http://localhost:3000/callback")));
+        assert!(auth_url.contains(&encoded_callback));
     }
 }
