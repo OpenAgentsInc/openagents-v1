@@ -29,9 +29,9 @@ pub enum AuthError {
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> axum::response::Response {
-        let status = match self {
+        let status = match &self {
             AuthError::NotAuthenticated => StatusCode::UNAUTHORIZED,
-            AuthError::SessionError(e) => e.into(),
+            AuthError::SessionError(ref e) => (*e).clone().into(),
         };
 
         let body = Json(ErrorResponse {
@@ -62,10 +62,7 @@ where
             .map_err(|_| AuthError::NotAuthenticated)?;
 
         // Get cookies from the request
-        let cookies = parts
-            .extract::<CookieJar>()
-            .await
-            .map_err(|_| AuthError::NotAuthenticated)?;
+        let cookies = CookieJar::from_headers(&parts.headers);
 
         // Get session token from cookie
         let session_token = cookies
@@ -104,10 +101,12 @@ mod tests {
         response::IntoResponse,
         routing::get,
         Router,
+        debug_handler,
     };
     use axum_extra::extract::cookie::Cookie;
     use tower::ServiceExt;
 
+    #[debug_handler]
     async fn test_handler(user: AuthenticatedUser) -> impl IntoResponse {
         Json(user.user)
     }
