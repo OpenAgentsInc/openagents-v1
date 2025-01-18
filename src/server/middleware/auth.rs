@@ -4,11 +4,9 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use async_trait::async_trait;
 use axum_extra::extract::cookie::CookieJar;
 use serde::Serialize;
 use std::future::Future;
-use std::pin::Pin;
 
 use crate::server::services::{session::{Session, SessionError}, auth::User};
 use crate::server::handlers::auth::AppState;
@@ -55,11 +53,11 @@ where
 {
     type Rejection = AuthError;
 
-    fn from_request_parts<'a, 'b>(
-        parts: &'a mut Parts,
-        state: &'b S,
-    ) -> Pin<Box<dyn Future<Output = Result<Self, Self::Rejection>> + Send + 'b>> {
-        Box::pin(async move {
+    fn from_request_parts(
+        parts: &mut Parts,
+        _state: &S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
+        async move {
             // Get cookies from the request
             let cookies = CookieJar::from_headers(&parts.headers);
 
@@ -91,7 +89,7 @@ where
             .ok_or(AuthError::NotAuthenticated)?;
 
             Ok(AuthenticatedUser { user, session })
-        })
+        }
     }
 }
 
