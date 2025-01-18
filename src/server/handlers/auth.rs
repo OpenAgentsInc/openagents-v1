@@ -1,14 +1,15 @@
 use axum::{
     extract::{Query, State},
     http::{header::SET_COOKIE, HeaderMap, StatusCode},
-    response::{IntoResponse, Response},
+    response::IntoResponse,
+    Json,
 };
 use axum_extra::extract::{cookie::{Cookie, SameSite}, CookieJar};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use time::Duration;
 
-use crate::server::services::{OIDCConfig, Session, AuthResponse};
+use crate::server::services::{auth::{OIDCConfig, AuthResponse}, session::Session};
 
 const SESSION_COOKIE_NAME: &str = "session";
 const SESSION_DURATION_DAYS: i64 = 7;
@@ -56,7 +57,8 @@ pub async fn callback(
         })?;
 
     // Create session cookie
-    let cookie = Cookie::build(SESSION_COOKIE_NAME, auth_response.session_token)
+    let cookie = Cookie::build(SESSION_COOKIE_NAME)
+        .value(auth_response.session_token.clone())
         .path("/")
         .secure(true)
         .http_only(true)
@@ -84,7 +86,8 @@ pub async fn logout(
     }
 
     // Remove session cookie
-    let removal_cookie = Cookie::build(SESSION_COOKIE_NAME, "")
+    let removal_cookie = Cookie::build(SESSION_COOKIE_NAME)
+        .value("")
         .path("/")
         .secure(true)
         .http_only(true)
@@ -97,9 +100,6 @@ pub async fn logout(
 
     (StatusCode::OK, headers)
 }
-
-#[derive(Debug, Serialize)]
-struct Json<T>(T);
 
 #[cfg(test)]
 mod tests {
