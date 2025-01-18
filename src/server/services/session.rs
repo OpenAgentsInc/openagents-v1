@@ -241,13 +241,16 @@ mod tests {
         
         assert!(session.expires_at > original_expiry);
         
+        // Store token before deleting session
+        let token = session.token.clone();
+        
         // Delete session
         session.delete(pool)
             .await
             .expect("Failed to delete session");
         
-        // Verify session is gone
-        let result = Session::validate(&session.token, pool).await;
+        // Verify session is gone using stored token
+        let result = Session::validate(&token, pool).await;
         assert!(matches!(result, Err(SessionError::NotFound)));
     }
 
@@ -309,11 +312,14 @@ mod tests {
         assert_eq!(validated2.user_id, user_id);
         assert_ne!(validated1.id, validated2.id);
         
+        // Store token before deleting session
+        let token1 = validated1.token.clone();
+        
         // Delete one session
         validated1.delete(pool).await.unwrap();
         
         // Verify only the deleted session is gone
-        let result1 = Session::validate(&session1.token, pool).await;
+        let result1 = Session::validate(&token1, pool).await;
         let result2 = Session::validate(&session2.token, pool).await;
         
         assert!(matches!(result1, Err(SessionError::NotFound)));
