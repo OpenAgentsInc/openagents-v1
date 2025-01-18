@@ -7,6 +7,8 @@ use axum::{
 use async_trait::async_trait;
 use axum_extra::extract::cookie::CookieJar;
 use serde::Serialize;
+use std::future::Future;
+use std::pin::Pin;
 
 use crate::server::services::{session::{Session, SessionError}, auth::User};
 use crate::server::handlers::auth::AppState;
@@ -47,49 +49,49 @@ struct ErrorResponse {
     error: String,
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for AuthenticatedUser
 where
     S: Send + Sync,
 {
     type Rejection = AuthError;
 
-    #[allow(clippy::needless_lifetimes)]
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &S,
-    ) -> Result<Self, Self::Rejection> {
-        // Get cookies from the request
-        let cookies = CookieJar::from_headers(&parts.headers);
+    fn from_request_parts<'a>(
+        parts: &'a mut Parts,
+        state: &'a S,
+    ) -> Pin<Box<dyn Future<Output = Result<Self, Self::Rejection>> + Send + 'a>> {
+        Box::pin(async move {
+            // Get cookies from the request
+            let cookies = CookieJar::from_headers(&parts.headers);
 
-        // Get session token from cookie
-        let session_token = cookies
-            .get(SESSION_COOKIE_NAME)
-            .ok_or(AuthError::NotAuthenticated)?
-            .value()
-            .to_string();
+            // Get session token from cookie
+            let session_token = cookies
+                .get(SESSION_COOKIE_NAME)
+                .ok_or(AuthError::NotAuthenticated)?
+                .value()
+                .to_string();
 
-        // Get app state
-        let state = parts.extensions.get::<AppState>()
+            // Get app state
+            let state = parts.extensions.get::<AppState>()
+                .ok_or(AuthError::NotAuthenticated)?;
+
+            // Validate session
+            let session = Session::validate(&session_token, &state.pool)
+                .await
+                .map_err(AuthError::SessionError)?;
+
+            // Get user from database
+            let user = sqlx::query_as!(
+                User,
+                "SELECT id, pseudonym FROM users WHERE id = $1",
+                session.user_id
+            )
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(|e| AuthError::SessionError(SessionError::Database(e.to_string())))?
             .ok_or(AuthError::NotAuthenticated)?;
 
-        // Validate session
-        let session = Session::validate(&session_token, &state.pool)
-            .await
-            .map_err(AuthError::SessionError)?;
-
-        // Get user from database
-        let user = sqlx::query_as!(
-            User,
-            "SELECT id, pseudonym FROM users WHERE id = $1",
-            session.user_id
-        )
-        .fetch_optional(&state.pool)
-        .await
-        .map_err(|e| AuthError::SessionError(SessionError::Database(e.to_string())))?
-        .ok_or(AuthError::NotAuthenticated)?;
-
-        Ok(AuthenticatedUser { user, session })
+            Ok(AuthenticatedUser { user, session })
+        })
     }
 }
 
