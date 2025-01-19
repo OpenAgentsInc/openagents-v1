@@ -1,6 +1,12 @@
 use sqlx::PgPool;
 use std::env;
 use tokio::sync::OnceCell;
+use lazy_static::lazy_static;
+use tokio::sync::Mutex;
+
+lazy_static! {
+    static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
+}
 
 static TEST_DB_POOL: OnceCell<PgPool> = OnceCell::const_new();
 
@@ -18,18 +24,41 @@ pub async fn get_test_pool() -> &'static PgPool {
 }
 
 pub async fn cleanup_test_data(pool: &PgPool) {
-    // Drop triggers first to avoid conflicts
-    let _ = sqlx::query!("DROP TRIGGER IF EXISTS sessions_updated_at ON sessions").execute(pool).await;
-    let _ = sqlx::query!("DROP TRIGGER IF EXISTS users_updated_at ON users").execute(pool).await;
-    let _ = sqlx::query!("DROP FUNCTION IF EXISTS update_updated_at() CASCADE").execute(pool).await;
+    // Drop everything in a transaction
+    let mut tx = pool.begin().await.expect("Failed to start transaction");
 
-    // Clean up test data in reverse order of foreign key dependencies
-    let _ = sqlx::query!("DELETE FROM sessions").execute(pool).await;
-    let _ = sqlx::query!("DELETE FROM users").execute(pool).await;
+    // Drop triggers first
+    let _ = sqlx::query!("DROP TRIGGER IF EXISTS sessions_updated_at ON sessions")
+        .execute(&mut tx)
+        .await;
+    let _ = sqlx::query!("DROP TRIGGER IF EXISTS users_updated_at ON users")
+        .execute(&mut tx)
+        .await;
+
+    // Drop function
+    let _ = sqlx::query!("DROP FUNCTION IF EXISTS update_updated_at() CASCADE")
+        .execute(&mut tx)
+        .await;
+
+    // Clean up data
+    let _ = sqlx::query!("DELETE FROM sessions").execute(&mut tx).await;
+    let _ = sqlx::query!("DELETE FROM users").execute(&mut tx).await;
+
+    // Drop and recreate tables to ensure clean state
+    let _ = sqlx::query!("DROP TABLE IF EXISTS sessions CASCADE").execute(&mut tx).await;
+    let _ = sqlx::query!("DROP TABLE IF EXISTS users CASCADE").execute(&mut tx).await;
+
+    tx.commit().await.expect("Failed to commit cleanup transaction");
 }
 
 pub async fn setup_test_db(pool: &PgPool) {
-    // Create tables if they don't exist
+    // Ensure we have a lock for setup
+    let _lock = TEST_MUTEX.lock().await;
+    
+    // Use a transaction for the entire setup
+    let mut tx = pool.begin().await.expect("Failed to start transaction");
+
+    // Create tables
     sqlx::query!(
         r#"
         CREATE TABLE IF NOT EXISTS users (
@@ -40,7 +69,7 @@ pub async fn setup_test_db(pool: &PgPool) {
         )
         "#
     )
-    .execute(pool)
+    .execute(&mut tx)
     .await
     .expect("Failed to create users table");
 
@@ -56,23 +85,23 @@ pub async fn setup_test_db(pool: &PgPool) {
         )
         "#
     )
-    .execute(pool)
+    .execute(&mut tx)
     .await
     .expect("Failed to create sessions table");
 
     // Create indexes
     sqlx::query!("CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)")
-        .execute(pool)
+        .execute(&mut tx)
         .await
         .expect("Failed to create sessions token index");
 
     sqlx::query!("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)")
-        .execute(pool)
+        .execute(&mut tx)
         .await
         .expect("Failed to create sessions user_id index");
 
     sqlx::query!("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)")
-        .execute(pool)
+        .execute(&mut tx)
         .await
         .expect("Failed to create sessions expires_at index");
 
@@ -88,11 +117,11 @@ pub async fn setup_test_db(pool: &PgPool) {
         $$ LANGUAGE plpgsql;
         "#
     )
-    .execute(pool)
+    .execute(&mut tx)
     .await
     .expect("Failed to create update_updated_at function");
 
-    // Create users trigger
+    // Create triggers
     sqlx::query!(
         r#"
         CREATE TRIGGER users_updated_at
@@ -101,11 +130,10 @@ pub async fn setup_test_db(pool: &PgPool) {
             EXECUTE FUNCTION update_updated_at()
         "#
     )
-    .execute(pool)
+    .execute(&mut tx)
     .await
     .expect("Failed to create users updated_at trigger");
 
-    // Create sessions trigger
     sqlx::query!(
         r#"
         CREATE TRIGGER sessions_updated_at
@@ -114,7 +142,26 @@ pub async fn setup_test_db(pool: &PgPool) {
             EXECUTE FUNCTION update_updated_at()
         "#
     )
-    .execute(pool)
+    .execute(&mut tx)
     .await
     .expect("Failed to create sessions updated_at trigger");
+
+    // Commit all changes
+    tx.commit().await.expect("Failed to commit setup transaction");
+}
+
+// Helper function to create a test user with a specific pseudonym
+pub async fn create_test_user(pool: &PgPool, pseudonym: &str) -> uuid::Uuid {
+    sqlx::query!(
+        r#"
+        INSERT INTO users (pseudonym)
+        VALUES ($1)
+        RETURNING id
+        "#,
+        pseudonym,
+    )
+    .fetch_one(pool)
+    .await
+    .expect("Failed to create test user")
+    .id
 }
