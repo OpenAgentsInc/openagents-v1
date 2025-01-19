@@ -4,14 +4,16 @@ use sqlx::PgPool;
 use std::env;
 use uuid::Uuid;
 
+use openagents::server::services::test_helpers::{get_test_pool, begin_test_transaction};
+
 async fn setup_test_db() -> PgPool {
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    PgPool::connect(&database_url).await.unwrap()
+    get_test_pool().await.clone()
 }
 
 #[tokio::test]
 async fn test_agent_validation_errors() {
     let pool = setup_test_db().await;
+    let mut tx = begin_test_transaction(&pool).await;
     let manager = AgentManager::new(pool.clone());
 
     // Test invalid pubkey
