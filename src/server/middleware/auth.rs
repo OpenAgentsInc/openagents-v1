@@ -1,172 +1,150 @@
 use axum::{
-    extract::FromRequestParts,
-    http::{request::Parts, StatusCode},
-    response::IntoResponse,
-    Json,
+    extract::Extension,
+    http::{Request, StatusCode},
+    middleware::Next,
+    response::Response,
 };
-use axum_extra::extract::cookie::CookieJar;
-use serde::Serialize;
-use std::future::Future;
+use sqlx::PgPool;
 
-use crate::server::services::{session::{Session, SessionError}, auth::User};
-use crate::server::handlers::auth::AppState;
+use crate::server::services::{
+    auth::{OIDCConfig, User},
+    session::Session,
+};
 
-const SESSION_COOKIE_NAME: &str = "session";
-
-#[derive(Debug)]
-pub struct AuthenticatedUser {
-    pub user: User,
-    pub session: Session,
+#[derive(Clone)]
+pub struct AuthState {
+    pub config: OIDCConfig,
+    pub pool: PgPool,
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum AuthError {
-    #[error("Not authenticated")]
-    NotAuthenticated,
-    #[error("Session error: {0}")]
-    SessionError(#[from] SessionError),
-}
-
-impl IntoResponse for AuthError {
-    fn into_response(self) -> axum::response::Response {
-        let status = match &self {
-            AuthError::NotAuthenticated => StatusCode::UNAUTHORIZED,
-            AuthError::SessionError(ref e) => (*e).clone().into(),
-        };
-
-        let body = Json(ErrorResponse {
-            error: self.to_string(),
-        });
-
-        (status, body).into_response()
+impl AuthState {
+    pub fn new(config: OIDCConfig, pool: PgPool) -> Self {
+        Self { config, pool }
     }
 }
 
-#[derive(Serialize)]
-struct ErrorResponse {
-    error: String,
+#[derive(Clone)]
+pub struct AuthenticatedUser {
+    pub id: uuid::Uuid,
+    pub pseudonym: String,
 }
 
-impl<S> FromRequestParts<S> for AuthenticatedUser
-where
-    S: Send + Sync,
-{
-    type Rejection = AuthError;
-
-    fn from_request_parts(
-        parts: &mut Parts,
-        _state: &S,
-    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-        async move {
-            // Get cookies from the request
-            let cookies = CookieJar::from_headers(&parts.headers);
-
-            // Get session token from cookie
-            let session_token = cookies
-                .get(SESSION_COOKIE_NAME)
-                .ok_or(AuthError::NotAuthenticated)?
-                .value()
-                .to_string();
-
-            // Get app state
-            let state = parts.extensions.get::<AppState>()
-                .ok_or(AuthError::NotAuthenticated)?;
-
-            // Validate session
-            let session = Session::validate(&session_token, &state.pool)
-                .await
-                .map_err(AuthError::SessionError)?;
-
-            // Get user from database
-            let user = sqlx::query_as!(
-                User,
-                "SELECT id, pseudonym FROM users WHERE id = $1",
-                session.user_id
-            )
-            .fetch_optional(&state.pool)
-            .await
-            .map_err(|e| AuthError::SessionError(SessionError::Database(e.to_string())))?
-            .ok_or(AuthError::NotAuthenticated)?;
-
-            Ok(AuthenticatedUser { user, session })
+impl From<User> for AuthenticatedUser {
+    fn from(user: User) -> Self {
+        Self {
+            id: user.id,
+            pseudonym: user.pseudonym,
         }
     }
+}
+
+pub async fn require_auth<B>(
+    Extension(state): Extension<AuthState>,
+    mut request: Request<B>,
+    next: Next<B>,
+) -> Result<Response, StatusCode> {
+    // Get session token from cookie
+    let cookies = axum_extra::extract::cookie::CookieJar::from_headers(request.headers());
+    let session_token = cookies
+        .get("session")
+        .ok_or(StatusCode::UNAUTHORIZED)?
+        .value()
+        .to_string();
+
+    // Validate session and get user
+    let user = state
+        .config
+        .validate_session(&session_token, &state.pool)
+        .await
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+    // Add authenticated user to request extensions
+    request.extensions_mut().insert(AuthenticatedUser::from(user));
+
+    // Continue with the request
+    Ok(next.run(request).await)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server::services::test_helpers::{get_test_pool, cleanup_test_data, setup_test_db, create_test_user};
+    use crate::server::services::test_helpers::{get_test_pool, begin_test_transaction};
     use axum::{
         body::Body,
-        http::Request,
+        http::{header::COOKIE, Request},
         response::IntoResponse,
         routing::get,
         Router,
     };
-    use axum_extra::extract::cookie::Cookie;
     use tower::ServiceExt;
-    use lazy_static::lazy_static;
-    use tokio::sync::Mutex;
 
-    lazy_static! {
-        static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
-    }
-
-    async fn test_handler(
-        user: AuthenticatedUser,
-    ) -> impl IntoResponse + Send + 'static {
-        Json(user.user)
+    async fn test_handler(Extension(user): Extension<AuthenticatedUser>) -> impl IntoResponse {
+        format!("Hello, {}!", user.pseudonym)
     }
 
     #[tokio::test]
     async fn test_auth_middleware() {
-        let _lock = TEST_MUTEX.lock().await;
-        
+        // Setup test database
         let pool = get_test_pool().await;
-        cleanup_test_data(pool).await;
-        setup_test_db(pool).await;
+        let mut tx = begin_test_transaction(pool).await;
+
+        // Create test config
+        let config = OIDCConfig::new(
+            "client123".to_string(),
+            "secret456".to_string(),
+            "http://localhost:3000/callback".to_string(),
+            "https://auth.scramble.com/authorize".to_string(),
+            "https://auth.scramble.com/token".to_string(),
+            "https://auth.scramble.com/.well-known/jwks.json".to_string(),
+        )
+        .unwrap();
 
         // Create test user and session
-        let user_id = create_test_user(pool, "test_user").await;
-        let session = Session::create(user_id, pool).await.unwrap();
+        let user_id = sqlx::query!(
+            "INSERT INTO users (pseudonym) VALUES ($1) RETURNING id",
+            "test_user"
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap()
+        .id;
 
-        // Create app state
-        let state = AppState::new(
-            crate::server::services::auth::OIDCConfig::new(
-                "test".to_string(),
-                "test".to_string(),
-                "test".to_string(),
-                "test".to_string(),
-                "test".to_string(),
-                "test".to_string(),
-            )
-            .unwrap(),
-            pool.clone(),
-        );
+        let session_token = uuid::Uuid::new_v4().to_string();
+        let expires_at = time::OffsetDateTime::now_utc() + time::Duration::hours(1);
+
+        sqlx::query!(
+            "INSERT INTO sessions (user_id, token, expires_at) VALUES ($1, $2, $3)",
+            user_id,
+            session_token,
+            expires_at
+        )
+        .execute(&mut *tx)
+        .await
+        .unwrap();
 
         // Create test app
+        let state = AuthState::new(config, pool.clone());
         let app = Router::new()
-            .route("/test", get(test_handler))
+            .route("/protected", get(test_handler))
+            .layer(axum::middleware::from_fn(require_auth))
             .layer(Extension(state));
 
         // Test without session cookie
         let response = app
             .clone()
-            .oneshot(Request::builder().uri("/test").body(Body::empty()).unwrap())
+            .oneshot(Request::builder().uri("/protected").body(Body::empty()).unwrap())
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
-        // Test with invalid session cookie
-        let cookie = Cookie::new(SESSION_COOKIE_NAME, "invalid_token");
+        // Test with invalid session token
         let response = app
             .clone()
             .oneshot(
                 Request::builder()
-                    .uri("/test")
-                    .header("Cookie", cookie.to_string())
+                    .uri("/protected")
+                    .header(COOKIE, "session=invalid_token")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -175,13 +153,12 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
-        // Test with valid session cookie
-        let cookie = Cookie::new(SESSION_COOKIE_NAME, &session.token);
+        // Test with valid session token
         let response = app
             .oneshot(
                 Request::builder()
-                    .uri("/test")
-                    .header("Cookie", cookie.to_string())
+                    .uri("/protected")
+                    .header(COOKIE, format!("session={}", session_token))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -190,7 +167,7 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::OK);
 
-        // Clean up
-        cleanup_test_data(pool).await;
+        // Rollback transaction
+        tx.rollback().await.unwrap();
     }
 }
