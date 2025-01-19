@@ -96,7 +96,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server::services::test_helpers::{get_test_pool, cleanup_test_data, setup_test_db};
+    use crate::server::services::test_helpers::{get_test_pool, cleanup_test_data, setup_test_db, create_test_user};
     use axum::{
         body::Body,
         http::Request,
@@ -106,6 +106,12 @@ mod tests {
     };
     use axum_extra::extract::cookie::Cookie;
     use tower::ServiceExt;
+    use lazy_static::lazy_static;
+    use tokio::sync::Mutex;
+
+    lazy_static! {
+        static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
+    }
 
     async fn test_handler(
         user: AuthenticatedUser,
@@ -115,25 +121,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_auth_middleware() {
+        let _lock = TEST_MUTEX.lock().await;
+        
         let pool = get_test_pool().await;
-        setup_test_db(pool).await;
         cleanup_test_data(pool).await;
+        setup_test_db(pool).await;
 
         // Create test user and session
-        let user = sqlx::query_as!(
-            User,
-            r#"
-            INSERT INTO users (pseudonym)
-            VALUES ($1)
-            RETURNING id, pseudonym
-            "#,
-            "test_user",
-        )
-        .fetch_one(pool)
-        .await
-        .unwrap();
-
-        let session = Session::create(user.id, pool).await.unwrap();
+        let user_id = create_test_user(pool, "test_user").await;
+        let session = Session::create(user_id, pool).await.unwrap();
 
         // Create app state
         let state = AppState::new(
