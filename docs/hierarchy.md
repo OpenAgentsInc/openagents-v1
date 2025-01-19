@@ -1,6 +1,6 @@
 # Project Hierarchy
 
-Generated on: 2025-01-18 09:57:16
+Generated on: 2025-01-18 18:54:41
 
 ### Structure
 
@@ -34,6 +34,11 @@ Generated on: 2025-01-18 09:57:16
 |   |   |-- 138.md
 |   |   |-- 139.md
 |   |   `-- 140.md
+|   |-- fixes/
+|   |   |-- auth-middleware.md
+|   |   |-- auth-state-management.md
+|   |   |-- axum-0.8-extractor-order.md
+|   |   `-- axum-0.8-extractors.md
 |   |-- configuration.md
 |   |-- hierarchy.md
 |   |-- htmx-nostr-chat.md
@@ -146,5 +151,5 @@ Generated on: 2025-01-18 09:57:16
 |-- spec.yaml
 `-- tailwind.config.cjs
 
-27 directories, 113 files
+28 directories, 117 files
 ```
