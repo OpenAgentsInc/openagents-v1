@@ -192,6 +192,12 @@ mod tests {
     use super::*;
     use crate::server::services::test_helpers::{get_test_pool, cleanup_test_data, setup_test_db};
     use sqlx::query;
+    use lazy_static::lazy_static;
+    use tokio::sync::Mutex;
+
+    lazy_static! {
+        static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
+    }
 
     async fn create_test_user(pool: &PgPool) -> Uuid {
         query!(
@@ -210,9 +216,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_session_lifecycle() {
+        let _lock = TEST_MUTEX.lock().await;
+        
         let pool = get_test_pool().await;
-        setup_test_db(pool).await;
         cleanup_test_data(pool).await;
+        setup_test_db(pool).await;
         
         // Create a test user
         let user_id = create_test_user(pool).await;
@@ -257,9 +265,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_expired_session() {
+        let _lock = TEST_MUTEX.lock().await;
+        
         let pool = get_test_pool().await;
-        setup_test_db(pool).await;
         cleanup_test_data(pool).await;
+        setup_test_db(pool).await;
         
         // Create a test user
         let user_id = create_test_user(pool).await;
@@ -296,9 +306,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_sessions() {
+        let _lock = TEST_MUTEX.lock().await;
+        
         let pool = get_test_pool().await;
-        setup_test_db(pool).await;
         cleanup_test_data(pool).await;
+        setup_test_db(pool).await;
         
         // Create test user
         let user_id = create_test_user(pool).await;
