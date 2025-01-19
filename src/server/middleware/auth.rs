@@ -41,7 +41,7 @@ impl From<User> for AuthenticatedUser {
 pub async fn require_auth<B>(
     Extension(state): Extension<AuthState>,
     mut request: Request<B>,
-    next: Next<B>,
+    next: Next,
 ) -> Result<Response, StatusCode> {
     // Get session token from cookie
     let cookies = axum_extra::extract::cookie::CookieJar::from_headers(request.headers());

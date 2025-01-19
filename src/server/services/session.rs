@@ -32,7 +32,7 @@ impl From<SessionError> for StatusCode {
 }
 
 impl Session {
-    pub async fn create(user_id: Uuid, pool: &PgPool) -> Result<Self, SessionError> {
+    pub async fn create(user_id: Uuid, executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>) -> Result<Self, SessionError> {
         let token = Uuid::new_v4().to_string();
         let expires_at = OffsetDateTime::now_utc() + time::Duration::hours(24);
 
@@ -54,7 +54,7 @@ impl Session {
         Ok(session)
     }
 
-    pub async fn validate(token: &str, pool: &PgPool) -> Result<Self, SessionError> {
+    pub async fn validate(token: &str, executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>) -> Result<Self, SessionError> {
         let session = sqlx::query_as!(
             Session,
             r#"
@@ -76,7 +76,7 @@ impl Session {
         Ok(session)
     }
 
-    pub async fn delete(self, pool: &PgPool) -> Result<(), SessionError> {
+    pub async fn delete(self, executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>) -> Result<(), SessionError> {
         sqlx::query!(
             r#"
             DELETE FROM sessions

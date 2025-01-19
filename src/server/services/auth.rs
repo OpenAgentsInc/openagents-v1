@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Row};
 use std::fmt::{self, Display};
 use uuid::Uuid;
-use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm};
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation, Algorithm}; 
 use super::session::{Session, SessionError};
 use lazy_static::lazy_static;
 use tokio::sync::Mutex;
