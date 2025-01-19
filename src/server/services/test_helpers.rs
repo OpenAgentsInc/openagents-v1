@@ -24,39 +24,31 @@ pub async fn get_test_pool() -> &'static PgPool {
 }
 
 pub async fn cleanup_test_data(pool: &PgPool) {
-    // Drop everything in a transaction
-    let mut tx = pool.begin().await.expect("Failed to start transaction");
-
     // Drop triggers first
     let _ = sqlx::query!("DROP TRIGGER IF EXISTS sessions_updated_at ON sessions")
-        .execute(&mut tx)
+        .execute(pool)
         .await;
     let _ = sqlx::query!("DROP TRIGGER IF EXISTS users_updated_at ON users")
-        .execute(&mut tx)
+        .execute(pool)
         .await;
 
     // Drop function
     let _ = sqlx::query!("DROP FUNCTION IF EXISTS update_updated_at() CASCADE")
-        .execute(&mut tx)
+        .execute(pool)
         .await;
 
     // Clean up data
-    let _ = sqlx::query!("DELETE FROM sessions").execute(&mut tx).await;
-    let _ = sqlx::query!("DELETE FROM users").execute(&mut tx).await;
+    let _ = sqlx::query!("DELETE FROM sessions").execute(pool).await;
+    let _ = sqlx::query!("DELETE FROM users").execute(pool).await;
 
     // Drop and recreate tables to ensure clean state
-    let _ = sqlx::query!("DROP TABLE IF EXISTS sessions CASCADE").execute(&mut tx).await;
-    let _ = sqlx::query!("DROP TABLE IF EXISTS users CASCADE").execute(&mut tx).await;
-
-    tx.commit().await.expect("Failed to commit cleanup transaction");
+    let _ = sqlx::query!("DROP TABLE IF EXISTS sessions CASCADE").execute(pool).await;
+    let _ = sqlx::query!("DROP TABLE IF EXISTS users CASCADE").execute(pool).await;
 }
 
 pub async fn setup_test_db(pool: &PgPool) {
     // Ensure we have a lock for setup
     let _lock = TEST_MUTEX.lock().await;
-    
-    // Use a transaction for the entire setup
-    let mut tx = pool.begin().await.expect("Failed to start transaction");
 
     // Create tables
     sqlx::query!(
@@ -69,7 +61,7 @@ pub async fn setup_test_db(pool: &PgPool) {
         )
         "#
     )
-    .execute(&mut tx)
+    .execute(pool)
     .await
     .expect("Failed to create users table");
 
@@ -85,23 +77,23 @@ pub async fn setup_test_db(pool: &PgPool) {
         )
         "#
     )
-    .execute(&mut tx)
+    .execute(pool)
     .await
     .expect("Failed to create sessions table");
 
     // Create indexes
     sqlx::query!("CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)")
-        .execute(&mut tx)
+        .execute(pool)
         .await
         .expect("Failed to create sessions token index");
 
     sqlx::query!("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)")
-        .execute(&mut tx)
+        .execute(pool)
         .await
         .expect("Failed to create sessions user_id index");
 
     sqlx::query!("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)")
-        .execute(&mut tx)
+        .execute(pool)
         .await
         .expect("Failed to create sessions expires_at index");
 
@@ -117,37 +109,36 @@ pub async fn setup_test_db(pool: &PgPool) {
         $$ LANGUAGE plpgsql;
         "#
     )
-    .execute(&mut tx)
+    .execute(pool)
     .await
     .expect("Failed to create update_updated_at function");
 
     // Create triggers
     sqlx::query!(
         r#"
+        DROP TRIGGER IF EXISTS users_updated_at ON users;
         CREATE TRIGGER users_updated_at
             BEFORE UPDATE ON users
             FOR EACH ROW
-            EXECUTE FUNCTION update_updated_at()
+            EXECUTE FUNCTION update_updated_at();
         "#
     )
-    .execute(&mut tx)
+    .execute(pool)
     .await
     .expect("Failed to create users updated_at trigger");
 
     sqlx::query!(
         r#"
+        DROP TRIGGER IF EXISTS sessions_updated_at ON sessions;
         CREATE TRIGGER sessions_updated_at
             BEFORE UPDATE ON sessions
             FOR EACH ROW
-            EXECUTE FUNCTION update_updated_at()
+            EXECUTE FUNCTION update_updated_at();
         "#
     )
-    .execute(&mut tx)
+    .execute(pool)
     .await
     .expect("Failed to create sessions updated_at trigger");
-
-    // Commit all changes
-    tx.commit().await.expect("Failed to commit setup transaction");
 }
 
 // Helper function to create a test user with a specific pseudonym
