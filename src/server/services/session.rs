@@ -47,7 +47,7 @@ impl Session {
             token,
             expires_at,
         )
-        .fetch_one(pool)
+        .fetch_one(executor)
         .await
         .map_err(|e| SessionError::Database(e.to_string()))?;
 
@@ -64,7 +64,7 @@ impl Session {
             "#,
             token,
         )
-        .fetch_optional(pool)
+        .fetch_optional(executor)
         .await
         .map_err(|e| SessionError::Database(e.to_string()))?
         .ok_or(SessionError::NotFound)?;
@@ -121,7 +121,7 @@ mod tests {
         assert_eq!(validated.user_id, user_id);
 
         // Delete session
-        session.delete(&mut *tx).await.unwrap();
+        session.clone().delete(&mut *tx).await.unwrap();
 
         // Verify session is deleted
         let result = Session::validate(&session.token, &mut *tx).await;
@@ -198,7 +198,7 @@ mod tests {
         assert_eq!(validated2.user_id, user_id);
 
         // Delete one session
-        session1.delete(&mut *tx).await.unwrap();
+        session1.clone().delete(&mut *tx).await.unwrap();
 
         // Verify first session is deleted but second still works
         let result1 = Session::validate(&session1.token, &mut *tx).await;

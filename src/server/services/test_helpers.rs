@@ -42,7 +42,7 @@ async fn initialize_schema(pool: &PgPool) {
 
     // Drop users trigger first
     sqlx::query!("DROP TRIGGER IF EXISTS users_updated_at ON users")
-        .execute(pool)
+        .execute(executor)
         .await
         .expect("Failed to drop users updated_at trigger");
 
@@ -201,7 +201,7 @@ pub async fn cleanup_test_user<'a>(
 }
 
 // For backward compatibility with existing tests
-pub async fn setup_test_db(pool: &PgPool) {
+pub async fn setup_test_db(_pool: &PgPool) {
     // No-op as schema is initialized in get_test_pool
 }
 

@@ -6,10 +6,7 @@ use axum::{
 };
 use sqlx::PgPool;
 
-use crate::server::services::{
-    auth::{OIDCConfig, User},
-    session::Session,
-};
+use crate::server::services::auth::{OIDCConfig, User};
 
 #[derive(Clone)]
 pub struct AuthState {
@@ -62,7 +59,7 @@ pub async fn require_auth<B>(
     request.extensions_mut().insert(AuthenticatedUser::from(user));
 
     // Continue with the request
-    Ok(next.run(request).await)
+    Ok(next.run(request.map(axum::body::Body::from)).await)
 }
 
 #[cfg(test)]

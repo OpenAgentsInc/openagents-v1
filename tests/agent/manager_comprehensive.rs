@@ -1,6 +1,5 @@
 use openagents::agents::{AgentManager, InstanceStatus};
 use serde_json::json;
-use sqlx::PgPool;
 use std::env;
 use uuid::Uuid;
 
