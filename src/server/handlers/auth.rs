@@ -17,7 +17,7 @@ const SESSION_DURATION_DAYS: i64 = 7;
 #[derive(Debug, Deserialize)]
 pub struct CallbackParams {
     code: String,
-    state: String, // TODO: Validate state parameter
+    // state: String, // TODO: Validate state parameter
 }
 
 #[derive(Debug, Serialize)]
