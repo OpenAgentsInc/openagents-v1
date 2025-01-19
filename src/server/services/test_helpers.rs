@@ -18,6 +18,11 @@ pub async fn get_test_pool() -> &'static PgPool {
 }
 
 pub async fn cleanup_test_data(pool: &PgPool) {
+    // Drop triggers first to avoid conflicts
+    let _ = sqlx::query!("DROP TRIGGER IF EXISTS sessions_updated_at ON sessions").execute(pool).await;
+    let _ = sqlx::query!("DROP TRIGGER IF EXISTS users_updated_at ON users").execute(pool).await;
+    let _ = sqlx::query!("DROP FUNCTION IF EXISTS update_updated_at() CASCADE").execute(pool).await;
+
     // Clean up test data in reverse order of foreign key dependencies
     let _ = sqlx::query!("DELETE FROM sessions").execute(pool).await;
     let _ = sqlx::query!("DELETE FROM users").execute(pool).await;
@@ -71,7 +76,7 @@ pub async fn setup_test_db(pool: &PgPool) {
         .await
         .expect("Failed to create sessions expires_at index");
 
-    // Create updated_at trigger function if it doesn't exist
+    // Create updated_at trigger function
     sqlx::query!(
         r#"
         CREATE OR REPLACE FUNCTION update_updated_at()
@@ -87,12 +92,6 @@ pub async fn setup_test_db(pool: &PgPool) {
     .await
     .expect("Failed to create update_updated_at function");
 
-    // Drop existing triggers first
-    sqlx::query!("DROP TRIGGER IF EXISTS users_updated_at ON users")
-        .execute(pool)
-        .await
-        .expect("Failed to drop users updated_at trigger");
-
     // Create users trigger
     sqlx::query!(
         r#"
@@ -105,12 +104,6 @@ pub async fn setup_test_db(pool: &PgPool) {
     .execute(pool)
     .await
     .expect("Failed to create users updated_at trigger");
-
-    // Drop existing sessions trigger
-    sqlx::query!("DROP TRIGGER IF EXISTS sessions_updated_at ON sessions")
-        .execute(pool)
-        .await
-        .expect("Failed to drop sessions updated_at trigger");
 
     // Create sessions trigger
     sqlx::query!(
