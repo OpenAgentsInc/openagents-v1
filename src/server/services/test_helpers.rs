@@ -3,6 +3,7 @@ use std::env;
 use tokio::sync::OnceCell;
 use lazy_static::lazy_static;
 use tokio::sync::Mutex;
+use time::OffsetDateTime;
 
 lazy_static! {
     static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
@@ -170,7 +171,8 @@ pub async fn create_test_session(pool: &PgPool, user_id: uuid::Uuid) -> String {
     let _lock = TEST_MUTEX.lock().await;
     
     let token = uuid::Uuid::new_v4().to_string();
-    let expires_at = chrono::Utc::now() + chrono::Duration::hours(1);
+    // Use time::OffsetDateTime instead of chrono::DateTime
+    let expires_at = OffsetDateTime::now_utc() + time::Duration::hours(1);
 
     sqlx::query!(
         r#"
