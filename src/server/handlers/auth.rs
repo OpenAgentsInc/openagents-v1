@@ -17,7 +17,7 @@ const SESSION_DURATION_DAYS: i64 = 7;
 #[derive(Debug, Deserialize)]
 pub struct CallbackParams {
     code: String,
-    // state: String, // TODO: Validate state parameter
+    state: String, // TODO: Validate state parameter
 }
 
 #[derive(Debug, Serialize)]
@@ -113,7 +113,7 @@ pub async fn logout(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server::services::test_helpers::{get_test_pool, cleanup_test_data, setup_test_db};
+    use crate::server::services::test_helpers::{get_test_pool, begin_test_transaction};
     use axum::{
         body::Body,
         http::Request,
@@ -123,21 +123,14 @@ mod tests {
     use tower::ServiceExt;
     use wiremock::{MockServer, Mock, ResponseTemplate};
     use wiremock::matchers::{method, path};
-    use lazy_static::lazy_static;
-    use tokio::sync::Mutex;
-
-    lazy_static! {
-        static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
-    }
+    use jsonwebtoken::{encode, Header, EncodingKey};
+    use crate::server::services::auth::Claims;
 
     #[tokio::test]
     async fn test_auth_flow() {
-        let _lock = TEST_MUTEX.lock().await;
-        
         // Setup test database
         let pool = get_test_pool().await;
-        cleanup_test_data(pool).await;
-        setup_test_db(pool).await;
+        let mut tx = begin_test_transaction(pool).await;
 
         // Setup mock OIDC server
         let mock_server = MockServer::start().await;
@@ -154,16 +147,16 @@ mod tests {
         .unwrap();
 
         // Create a test JWT token signed with the same secret
-        let token = jsonwebtoken::encode(
-            &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
-            &crate::server::services::auth::Claims {
+        let token = encode(
+            &Header::new(jsonwebtoken::Algorithm::HS256),
+            &Claims {
                 sub: "test_pseudonym".to_string(),
                 exp: 1999999999,
                 iat: 1516239022,
                 iss: "https://auth.scramble.com".to_string(),
                 aud: "client123".to_string(),
             },
-            &jsonwebtoken::EncodingKey::from_secret(config.client_secret().as_bytes()),
+            &EncodingKey::from_secret(config.client_secret().as_bytes()),
         )
         .unwrap();
 
@@ -237,7 +230,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         assert!(response.headers().contains_key(SET_COOKIE));
 
-        // Clean up
-        cleanup_test_data(pool).await;
+        // Rollback transaction
+        tx.rollback().await.unwrap();
     }
 }
