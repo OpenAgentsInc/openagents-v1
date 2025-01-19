@@ -100,12 +100,12 @@ pub struct User {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Claims {
-    sub: String,
-    exp: usize,
-    iat: usize,
-    iss: String,
-    aud: String,
+pub struct Claims {
+    pub sub: String,
+    pub exp: usize,
+    pub iat: usize,
+    pub iss: String,
+    pub aud: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -136,6 +136,10 @@ impl OIDCConfig {
             token_endpoint,
             jwks_uri,
         })
+    }
+
+    pub fn client_secret(&self) -> &str {
+        &self.client_secret
     }
 
     pub fn authorization_url(&self) -> String {
