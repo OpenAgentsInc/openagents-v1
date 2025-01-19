@@ -40,14 +40,19 @@ async fn initialize_schema(pool: &PgPool) {
     .await
     .expect("Failed to create users table");
 
-    // Create users updated_at trigger
+    // Drop users trigger first
+    sqlx::query!("DROP TRIGGER IF EXISTS users_updated_at ON users")
+        .execute(pool)
+        .await
+        .expect("Failed to drop users updated_at trigger");
+
+    // Create users trigger
     sqlx::query!(
         r#"
-        DROP TRIGGER IF EXISTS users_updated_at ON users;
         CREATE TRIGGER users_updated_at
             BEFORE UPDATE ON users
             FOR EACH ROW
-            EXECUTE FUNCTION update_updated_at();
+            EXECUTE FUNCTION update_updated_at()
         "#
     )
     .execute(pool)
@@ -71,14 +76,19 @@ async fn initialize_schema(pool: &PgPool) {
     .await
     .expect("Failed to create sessions table");
 
-    // Create sessions updated_at trigger
+    // Drop sessions trigger first
+    sqlx::query!("DROP TRIGGER IF EXISTS sessions_updated_at ON sessions")
+        .execute(pool)
+        .await
+        .expect("Failed to drop sessions updated_at trigger");
+
+    // Create sessions trigger
     sqlx::query!(
         r#"
-        DROP TRIGGER IF EXISTS sessions_updated_at ON sessions;
         CREATE TRIGGER sessions_updated_at
             BEFORE UPDATE ON sessions
             FOR EACH ROW
-            EXECUTE FUNCTION update_updated_at();
+            EXECUTE FUNCTION update_updated_at()
         "#
     )
     .execute(pool)
@@ -188,6 +198,19 @@ pub async fn cleanup_test_user<'a>(
     .execute(&mut **tx)
     .await
     .expect("Failed to cleanup test user");
+}
+
+// For backward compatibility with existing tests
+pub async fn setup_test_db(pool: &PgPool) {
+    // No-op as schema is initialized in get_test_pool
+}
+
+pub async fn cleanup_test_data(pool: &PgPool) {
+    // Clean up data but keep schema
+    let mut tx = begin_test_transaction(pool).await;
+    sqlx::query!("DELETE FROM sessions").execute(&mut *tx).await.unwrap();
+    sqlx::query!("DELETE FROM users").execute(&mut *tx).await.unwrap();
+    tx.commit().await.unwrap();
 }
 
 #[cfg(test)]
