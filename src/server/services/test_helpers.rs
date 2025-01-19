@@ -1,63 +1,15 @@
 use sqlx::PgPool;
 use std::env;
 use tokio::sync::OnceCell;
-use lazy_static::lazy_static;
-use tokio::sync::Mutex;
 use time::OffsetDateTime;
+use std::sync::Once;
 
-lazy_static! {
-    static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
-}
-
+static INIT: Once = Once::new();
 static TEST_DB_POOL: OnceCell<PgPool> = OnceCell::const_new();
 
-pub async fn get_test_pool() -> &'static PgPool {
-    TEST_DB_POOL.get_or_init(|| async {
-        let database_url = env::var("TEST_DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/openagents_test".to_string());
-        
-        sqlx::postgres::PgPoolOptions::new()
-            .max_connections(5) // Increased for better concurrent test handling
-            .connect(&database_url)
-            .await
-            .expect("Failed to create test database pool")
-    }).await
-}
-
-/// Drops all test database objects in the correct order
-pub async fn cleanup_test_data(pool: &PgPool) {
-    let _lock = TEST_MUTEX.lock().await;
-
-    // Drop triggers first
-    let _ = sqlx::query!("DROP TRIGGER IF EXISTS sessions_updated_at ON sessions")
-        .execute(pool)
-        .await;
-    let _ = sqlx::query!("DROP TRIGGER IF EXISTS users_updated_at ON users")
-        .execute(pool)
-        .await;
-
-    // Drop tables (in correct order due to foreign keys)
-    let _ = sqlx::query!("DROP TABLE IF EXISTS sessions CASCADE")
-        .execute(pool)
-        .await;
-    let _ = sqlx::query!("DROP TABLE IF EXISTS users CASCADE")
-        .execute(pool)
-        .await;
-
-    // Drop functions last
-    let _ = sqlx::query!("DROP FUNCTION IF EXISTS update_updated_at() CASCADE")
-        .execute(pool)
-        .await;
-}
-
-/// Creates the test database schema in the correct order
-pub async fn setup_test_db(pool: &PgPool) {
-    let _lock = TEST_MUTEX.lock().await;
-
-    // First ensure clean state
-    cleanup_test_data(pool).await;
-
-    // Create the updated_at trigger function first
+/// Initialize the test database schema
+async fn initialize_schema(pool: &PgPool) {
+    // Create the updated_at trigger function
     sqlx::query!(
         r#"
         CREATE OR REPLACE FUNCTION update_updated_at()
@@ -91,10 +43,11 @@ pub async fn setup_test_db(pool: &PgPool) {
     // Create users updated_at trigger
     sqlx::query!(
         r#"
+        DROP TRIGGER IF EXISTS users_updated_at ON users;
         CREATE TRIGGER users_updated_at
             BEFORE UPDATE ON users
             FOR EACH ROW
-            EXECUTE FUNCTION update_updated_at()
+            EXECUTE FUNCTION update_updated_at();
         "#
     )
     .execute(pool)
@@ -121,10 +74,11 @@ pub async fn setup_test_db(pool: &PgPool) {
     // Create sessions updated_at trigger
     sqlx::query!(
         r#"
+        DROP TRIGGER IF EXISTS sessions_updated_at ON sessions;
         CREATE TRIGGER sessions_updated_at
             BEFORE UPDATE ON sessions
             FOR EACH ROW
-            EXECUTE FUNCTION update_updated_at()
+            EXECUTE FUNCTION update_updated_at();
         "#
     )
     .execute(pool)
@@ -148,10 +102,41 @@ pub async fn setup_test_db(pool: &PgPool) {
         .expect("Failed to create sessions expires_at index");
 }
 
+pub async fn get_test_pool() -> &'static PgPool {
+    TEST_DB_POOL.get_or_init(|| async {
+        let database_url = env::var("TEST_DATABASE_URL")
+            .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/openagents_test".to_string());
+        
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(5)
+            .connect(&database_url)
+            .await
+            .expect("Failed to create test database pool");
+
+        // Initialize schema only once
+        INIT.call_once(|| {
+            tokio::runtime::Runtime::new()
+                .unwrap()
+                .block_on(async {
+                    initialize_schema(&pool).await;
+                });
+        });
+
+        pool
+    })
+    .await
+}
+
+/// Start a new test transaction
+pub async fn begin_test_transaction(pool: &PgPool) -> sqlx::Transaction<'_, sqlx::Postgres> {
+    pool.begin().await.expect("Failed to start test transaction")
+}
+
 /// Helper function to create a test user with a specific pseudonym
-pub async fn create_test_user(pool: &PgPool, pseudonym: &str) -> uuid::Uuid {
-    let _lock = TEST_MUTEX.lock().await;
-    
+pub async fn create_test_user<'a>(
+    tx: &mut sqlx::Transaction<'a, sqlx::Postgres>,
+    pseudonym: &str,
+) -> uuid::Uuid {
     sqlx::query!(
         r#"
         INSERT INTO users (pseudonym)
@@ -160,18 +145,18 @@ pub async fn create_test_user(pool: &PgPool, pseudonym: &str) -> uuid::Uuid {
         "#,
         pseudonym,
     )
-    .fetch_one(pool)
+    .fetch_one(&mut **tx)
     .await
     .expect("Failed to create test user")
     .id
 }
 
 /// Helper function to create a test session for a user
-pub async fn create_test_session(pool: &PgPool, user_id: uuid::Uuid) -> String {
-    let _lock = TEST_MUTEX.lock().await;
-    
+pub async fn create_test_session<'a>(
+    tx: &mut sqlx::Transaction<'a, sqlx::Postgres>,
+    user_id: uuid::Uuid,
+) -> String {
     let token = uuid::Uuid::new_v4().to_string();
-    // Use time::OffsetDateTime instead of chrono::DateTime
     let expires_at = OffsetDateTime::now_utc() + time::Duration::hours(1);
 
     sqlx::query!(
@@ -184,22 +169,46 @@ pub async fn create_test_session(pool: &PgPool, user_id: uuid::Uuid) -> String {
         token,
         expires_at,
     )
-    .fetch_one(pool)
+    .fetch_one(&mut **tx)
     .await
     .expect("Failed to create test session")
     .token
 }
 
-/// Helper function to cleanup all test data for a specific user
-pub async fn cleanup_test_user(pool: &PgPool, user_id: uuid::Uuid) {
-    let _lock = TEST_MUTEX.lock().await;
-    
+/// Helper function to cleanup test data for a specific user
+pub async fn cleanup_test_user<'a>(
+    tx: &mut sqlx::Transaction<'a, sqlx::Postgres>,
+    user_id: uuid::Uuid,
+) {
     // Sessions will be deleted automatically due to ON DELETE CASCADE
     sqlx::query!(
         "DELETE FROM users WHERE id = $1",
         user_id
     )
-    .execute(pool)
+    .execute(&mut **tx)
     .await
     .expect("Failed to cleanup test user");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_transaction_isolation() {
+        let pool = get_test_pool().await;
+        let mut tx1 = begin_test_transaction(pool).await;
+        let mut tx2 = begin_test_transaction(pool).await;
+
+        // Create user in tx1
+        let user_id = create_test_user(&mut tx1, "test_user1").await;
+
+        // Try to create same user in tx2 (should not see tx1's changes)
+        let result = create_test_user(&mut tx2, "test_user1").await;
+        assert_ne!(user_id, result);
+
+        // Rollback both transactions
+        tx1.rollback().await.unwrap();
+        tx2.rollback().await.unwrap();
+    }
 }
