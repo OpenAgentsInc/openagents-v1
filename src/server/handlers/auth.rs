@@ -21,12 +21,12 @@ pub struct CallbackParams {
 }
 
 #[derive(Debug, Serialize)]
-struct ErrorResponse {
+pub struct ErrorResponse {
     error: String,
 }
 
 #[derive(Debug, Serialize)]
-struct LoginResponse {
+pub struct LoginResponse {
     url: String,
 }
 
@@ -123,13 +123,21 @@ mod tests {
     use tower::ServiceExt;
     use wiremock::{MockServer, Mock, ResponseTemplate};
     use wiremock::matchers::{method, path};
+    use lazy_static::lazy_static;
+    use tokio::sync::Mutex;
+
+    lazy_static! {
+        static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
+    }
 
     #[tokio::test]
     async fn test_auth_flow() {
+        let _lock = TEST_MUTEX.lock().await;
+        
         // Setup test database
         let pool = get_test_pool().await;
-        setup_test_db(pool).await;
         cleanup_test_data(pool).await;
+        setup_test_db(pool).await;
 
         // Setup mock OIDC server
         let mock_server = MockServer::start().await;
@@ -145,6 +153,20 @@ mod tests {
         )
         .unwrap();
 
+        // Create a test JWT token signed with the same secret
+        let token = jsonwebtoken::encode(
+            &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
+            &crate::server::services::auth::Claims {
+                sub: "test_pseudonym".to_string(),
+                exp: 1999999999,
+                iat: 1516239022,
+                iss: "https://auth.scramble.com".to_string(),
+                aud: "client123".to_string(),
+            },
+            &jsonwebtoken::EncodingKey::from_secret(config.client_secret().as_bytes()),
+        )
+        .unwrap();
+
         // Setup mock responses
         Mock::given(method("POST"))
             .and(path("/token"))
@@ -152,7 +174,7 @@ mod tests {
                 "access_token": "test_access_token",
                 "token_type": "Bearer",
                 "expires_in": 3600,
-                "id_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0X3BzZXVkb255bSIsImV4cCI6MTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJpc3MiOiJodHRwczovL2F1dGguc2NyYW1ibGUuY29tIiwiYXVkIjoiY2xpZW50MTIzIn0.8D8vhM6pzxsQPLUXeHxw7cWoKhvGp4BUJ4Q8E6JIftw"
+                "id_token": token
             })))
             .mount(&mock_server)
             .await;
