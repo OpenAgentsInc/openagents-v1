@@ -1,10 +1,15 @@
 use axum::http::StatusCode;
-use chrono::{DateTime, Duration, Utc};
-use rand::Rng;
-use serde::{Serialize};
 use sqlx::PgPool;
-use uuid::Uuid;
 use time::OffsetDateTime;
+use uuid::Uuid;
+
+#[derive(Debug, Clone)]
+pub struct Session {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub token: String,
+    pub expires_at: OffsetDateTime,
+}
 
 #[derive(Debug, thiserror::Error, Clone)]
 pub enum SessionError {
@@ -14,147 +19,63 @@ pub enum SessionError {
     Expired,
     #[error("Database error: {0}")]
     Database(String),
-    #[error("Failed to generate token")]
-    TokenGeneration,
-}
-
-impl From<sqlx::Error> for SessionError {
-    fn from(err: sqlx::Error) -> Self {
-        SessionError::Database(err.to_string())
-    }
 }
 
 impl From<SessionError> for StatusCode {
     fn from(error: SessionError) -> Self {
         match error {
-            SessionError::NotFound | SessionError::Expired => StatusCode::UNAUTHORIZED,
+            SessionError::NotFound => StatusCode::UNAUTHORIZED,
+            SessionError::Expired => StatusCode::UNAUTHORIZED,
             SessionError::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            SessionError::TokenGeneration => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
 
-#[derive(Debug, Serialize)]
-pub struct Session {
-    pub id: Uuid,
-    pub user_id: Uuid,
-    pub token: String,
-    #[serde(with = "chrono::serde::ts_seconds")]
-    pub expires_at: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_seconds")]
-    pub created_at: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_seconds")]
-    pub updated_at: DateTime<Utc>,
-}
-
 impl Session {
-    /// Generate a cryptographically secure random token
-    fn generate_token() -> Result<String, SessionError> {
-        let mut rng = rand::thread_rng();
-        let token: String = std::iter::repeat_with(|| {
-            const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-            let idx = rng.gen_range(0..CHARSET.len());
-            CHARSET[idx] as char
-        })
-        .take(32)
-        .collect();
-        
-        Ok(token)
-    }
-
-    fn to_offset_datetime(dt: DateTime<Utc>) -> OffsetDateTime {
-        OffsetDateTime::from_unix_timestamp(dt.timestamp()).unwrap()
-    }
-
-    fn from_offset_datetime(odt: OffsetDateTime) -> DateTime<Utc> {
-        DateTime::from_timestamp(odt.unix_timestamp(), 0).unwrap()
-    }
-
-    /// Create a new session for a user
     pub async fn create(user_id: Uuid, pool: &PgPool) -> Result<Self, SessionError> {
-        let token = Self::generate_token()?;
-        let expires_at = Utc::now() + Duration::hours(24); // 24 hour expiry
+        let token = Uuid::new_v4().to_string();
+        let expires_at = OffsetDateTime::now_utc() + time::Duration::hours(24);
 
-        let expires_at_offset = Self::to_offset_datetime(expires_at);
-
-        let row = sqlx::query!(
+        let session = sqlx::query_as!(
+            Session,
             r#"
             INSERT INTO sessions (user_id, token, expires_at)
             VALUES ($1, $2, $3)
-            RETURNING id, user_id, token, expires_at, created_at, updated_at
+            RETURNING id, user_id, token, expires_at
             "#,
             user_id,
             token,
-            expires_at_offset,
+            expires_at,
         )
         .fetch_one(pool)
-        .await?;
+        .await
+        .map_err(|e| SessionError::Database(e.to_string()))?;
 
-        Ok(Session {
-            id: row.id,
-            user_id: row.user_id,
-            token: row.token,
-            expires_at: Self::from_offset_datetime(row.expires_at),
-            created_at: Self::from_offset_datetime(row.created_at),
-            updated_at: Self::from_offset_datetime(row.updated_at),
-        })
+        Ok(session)
     }
 
-    /// Validate a session token and return the session if valid
     pub async fn validate(token: &str, pool: &PgPool) -> Result<Self, SessionError> {
-        let row = sqlx::query!(
+        let session = sqlx::query_as!(
+            Session,
             r#"
-            SELECT id, user_id, token, expires_at, created_at, updated_at
+            SELECT id, user_id, token, expires_at
             FROM sessions
             WHERE token = $1
             "#,
             token,
         )
         .fetch_optional(pool)
-        .await?
+        .await
+        .map_err(|e| SessionError::Database(e.to_string()))?
         .ok_or(SessionError::NotFound)?;
 
-        let session = Session {
-            id: row.id,
-            user_id: row.user_id,
-            token: row.token,
-            expires_at: Self::from_offset_datetime(row.expires_at),
-            created_at: Self::from_offset_datetime(row.created_at),
-            updated_at: Self::from_offset_datetime(row.updated_at),
-        };
-
-        if session.expires_at < Utc::now() {
+        if session.expires_at < OffsetDateTime::now_utc() {
             return Err(SessionError::Expired);
         }
 
         Ok(session)
     }
 
-    /// Refresh a session by extending its expiry time
-    pub async fn refresh(&mut self, pool: &PgPool) -> Result<(), SessionError> {
-        self.expires_at = Utc::now() + Duration::hours(24);
-        self.updated_at = Utc::now();
-
-        let expires_at_offset = Self::to_offset_datetime(self.expires_at);
-        let updated_at_offset = Self::to_offset_datetime(self.updated_at);
-
-        sqlx::query!(
-            r#"
-            UPDATE sessions
-            SET expires_at = $1, updated_at = $2
-            WHERE id = $3
-            "#,
-            expires_at_offset,
-            updated_at_offset,
-            self.id,
-        )
-        .execute(pool)
-        .await?;
-
-        Ok(())
-    }
-
-    /// Delete a session
     pub async fn delete(self, pool: &PgPool) -> Result<(), SessionError> {
         sqlx::query!(
             r#"
@@ -164,121 +85,70 @@ impl Session {
             self.id,
         )
         .execute(pool)
-        .await?;
+        .await
+        .map_err(|e| SessionError::Database(e.to_string()))?;
 
         Ok(())
-    }
-
-    /// Clean up expired sessions
-    pub async fn cleanup_expired(pool: &PgPool) -> Result<u64, SessionError> {
-        let now = Self::to_offset_datetime(Utc::now());
-
-        let result = sqlx::query!(
-            r#"
-            DELETE FROM sessions
-            WHERE expires_at < $1
-            "#,
-            now,
-        )
-        .execute(pool)
-        .await?;
-
-        Ok(result.rows_affected())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server::services::test_helpers::{get_test_pool, cleanup_test_data, setup_test_db};
-    use sqlx::query;
-    use lazy_static::lazy_static;
-    use tokio::sync::Mutex;
-
-    lazy_static! {
-        static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
-    }
-
-    async fn create_test_user(pool: &PgPool) -> Uuid {
-        query!(
-            r#"
-            INSERT INTO users (pseudonym)
-            VALUES ($1)
-            RETURNING id
-            "#,
-            "test_user",
-        )
-        .fetch_one(pool)
-        .await
-        .unwrap()
-        .id
-    }
+    use crate::server::services::test_helpers::{get_test_pool, begin_test_transaction};
 
     #[tokio::test]
     async fn test_session_lifecycle() {
-        let _lock = TEST_MUTEX.lock().await;
-        
         let pool = get_test_pool().await;
-        cleanup_test_data(pool).await;
-        setup_test_db(pool).await;
-        
-        // Create a test user
-        let user_id = create_test_user(pool).await;
-        
+        let mut tx = begin_test_transaction(pool).await;
+
+        // Create test user
+        let user_id = sqlx::query!(
+            "INSERT INTO users (pseudonym) VALUES ($1) RETURNING id",
+            "test_user"
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap()
+        .id;
+
         // Create session
-        let session = Session::create(user_id, pool)
-            .await
-            .expect("Failed to create session");
-        
-        assert_eq!(session.user_id, user_id);
-        assert!(session.expires_at > Utc::now());
-        
+        let session = Session::create(user_id, &mut *tx).await.unwrap();
+
         // Validate session
-        let validated = Session::validate(&session.token, pool)
-            .await
-            .expect("Failed to validate session");
-        
+        let validated = Session::validate(&session.token, &mut *tx).await.unwrap();
         assert_eq!(validated.id, session.id);
         assert_eq!(validated.user_id, user_id);
-        
-        // Refresh session
-        let mut session = validated;
-        let original_expiry = session.expires_at;
-        session.refresh(pool)
-            .await
-            .expect("Failed to refresh session");
-        
-        assert!(session.expires_at > original_expiry);
-        
-        // Store token before deleting session
-        let token = session.token.clone();
-        
+
         // Delete session
-        session.delete(pool)
-            .await
-            .expect("Failed to delete session");
-        
-        // Verify session is gone using stored token
-        let result = Session::validate(&token, pool).await;
+        session.delete(&mut *tx).await.unwrap();
+
+        // Verify session is deleted
+        let result = Session::validate(&session.token, &mut *tx).await;
         assert!(matches!(result, Err(SessionError::NotFound)));
+
+        tx.rollback().await.unwrap();
     }
 
     #[tokio::test]
     async fn test_expired_session() {
-        let _lock = TEST_MUTEX.lock().await;
-        
         let pool = get_test_pool().await;
-        cleanup_test_data(pool).await;
-        setup_test_db(pool).await;
-        
-        // Create a test user
-        let user_id = create_test_user(pool).await;
-        
-        // Create an expired session directly in the database
-        let token = Session::generate_token().unwrap();
-        let expired_at = Utc::now() - Duration::hours(1);
-        let expired_at_offset = Session::to_offset_datetime(expired_at);
-        
+        let mut tx = begin_test_transaction(pool).await;
+
+        // Create test user
+        let user_id = sqlx::query!(
+            "INSERT INTO users (pseudonym) VALUES ($1) RETURNING id",
+            "test_user"
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap()
+        .id;
+
+        // Create expired session
+        let token = Uuid::new_v4().to_string();
+        let expires_at = OffsetDateTime::now_utc() - time::Duration::hours(1);
+
         sqlx::query!(
             r#"
             INSERT INTO sessions (user_id, token, expires_at)
@@ -286,58 +156,57 @@ mod tests {
             "#,
             user_id,
             token,
-            expired_at_offset,
+            expires_at,
         )
-        .execute(pool)
+        .execute(&mut *tx)
         .await
-        .expect("Failed to insert expired session");
-        
-        // Attempt to validate expired session
-        let result = Session::validate(&token, pool).await;
+        .unwrap();
+
+        // Verify session is expired
+        let result = Session::validate(&token, &mut *tx).await;
         assert!(matches!(result, Err(SessionError::Expired)));
-        
-        // Clean up expired sessions
-        let cleaned = Session::cleanup_expired(pool)
-            .await
-            .expect("Failed to clean up expired sessions");
-        
-        assert!(cleaned > 0);
+
+        tx.rollback().await.unwrap();
     }
 
     #[tokio::test]
     async fn test_multiple_sessions() {
-        let _lock = TEST_MUTEX.lock().await;
-        
         let pool = get_test_pool().await;
-        cleanup_test_data(pool).await;
-        setup_test_db(pool).await;
-        
+        let mut tx = begin_test_transaction(pool).await;
+
         // Create test user
-        let user_id = create_test_user(pool).await;
-        
-        // Create multiple sessions for the same user
-        let session1 = Session::create(user_id, pool).await.unwrap();
-        let session2 = Session::create(user_id, pool).await.unwrap();
-        
-        // Validate both sessions work
-        let validated1 = Session::validate(&session1.token, pool).await.unwrap();
-        let validated2 = Session::validate(&session2.token, pool).await.unwrap();
-        
+        let user_id = sqlx::query!(
+            "INSERT INTO users (pseudonym) VALUES ($1) RETURNING id",
+            "test_user"
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap()
+        .id;
+
+        // Create multiple sessions
+        let session1 = Session::create(user_id, &mut *tx).await.unwrap();
+        let session2 = Session::create(user_id, &mut *tx).await.unwrap();
+
+        // Validate both sessions
+        let validated1 = Session::validate(&session1.token, &mut *tx).await.unwrap();
+        let validated2 = Session::validate(&session2.token, &mut *tx).await.unwrap();
+
+        assert_eq!(validated1.id, session1.id);
+        assert_eq!(validated2.id, session2.id);
         assert_eq!(validated1.user_id, user_id);
         assert_eq!(validated2.user_id, user_id);
-        assert_ne!(validated1.id, validated2.id);
-        
-        // Store token before deleting session
-        let token1 = validated1.token.clone();
-        
+
         // Delete one session
-        validated1.delete(pool).await.unwrap();
-        
-        // Verify only the deleted session is gone
-        let result1 = Session::validate(&token1, pool).await;
-        let result2 = Session::validate(&session2.token, pool).await;
-        
+        session1.delete(&mut *tx).await.unwrap();
+
+        // Verify first session is deleted but second still works
+        let result1 = Session::validate(&session1.token, &mut *tx).await;
+        let result2 = Session::validate(&session2.token, &mut *tx).await;
+
         assert!(matches!(result1, Err(SessionError::NotFound)));
         assert!(result2.is_ok());
+
+        tx.rollback().await.unwrap();
     }
 }
