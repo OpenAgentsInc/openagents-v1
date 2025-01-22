@@ -19,6 +19,19 @@ pub enum Message {
     },
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum SolverMessage {
+    #[serde(rename = "solve")]
+    Solve {
+        problem: String,
+    },
+    #[serde(rename = "solution")]
+    Solution {
+        solution: String,
+    },
+}
+
 pub struct WebSocketState {
     connections: Arc<RwLock<HashMap<String, UnboundedSender<WsMessage>>>>,
 }
