@@ -1,8 +1,10 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use openagents::server::services::{deepseek::DeepSeekService, StreamUpdate};
+use openagents::server::ws::handlers::chat::DeepSeekService as DeepSeekServiceTrait;
 use std::io::{stdout, Write};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+use serde_json::json;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -52,7 +54,7 @@ async fn main() -> Result<()> {
                 let (response, _) = service.chat(message, false).await?;
                 println!("{}", response);
             } else {
-                let mut stream = service.chat_stream(message, false).await;
+                let mut stream = service.chat_stream(message, vec![]).await;
                 while let Some(update) = stream.recv().await {
                     match update {
                         StreamUpdate::Content(text) => {
@@ -78,7 +80,7 @@ async fn main() -> Result<()> {
             } else {
                 print_colored("Reasoning:\n", Color::Yellow)?;
                 let mut in_reasoning = true;
-                let mut stream = service.chat_stream(message, true).await;
+                let mut stream = service.chat_stream(message, vec![json!({"type": "reasoning"})]).await;
                 while let Some(update) = stream.recv().await {
                     match update {
                         StreamUpdate::Reasoning(r) => {
