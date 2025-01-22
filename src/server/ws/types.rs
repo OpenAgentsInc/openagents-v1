@@ -34,7 +34,7 @@ impl WebSocketState {
         let connections = self.connections.read().await;
         let msg_str = serde_json::to_string(&msg).unwrap();
         for tx in connections.values() {
-            let _ = tx.send(WsMessage::Text(msg_str.clone()));
+            let _ = tx.send(WsMessage::Text(msg_str.clone().into()));
         }
     }
 
