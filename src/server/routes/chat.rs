@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::server::ws::handlers::chat::ChatHandlerService;
 use crate::server::tools::ToolError;
 
-pub fn chat_routes() -> Router<Arc<dyn ChatHandlerService>> {
+pub fn chat_routes() -> Router {
     Router::new()
         .route("/chat/:id", get(chat_session))
         .route("/chat/tools/toggle", post(toggle_tool))
@@ -55,7 +55,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_chat_session() {
-        let app = chat_routes();
+        let app = Router::new()
+            .route("/chat/:id", get(chat_session));
+
         let response = app
             .oneshot(
                 Request::builder()
