@@ -32,7 +32,7 @@ async fn chat_session(Path(_id): Path<Uuid>) -> Response {
 async fn toggle_tool(
     State(handler): State<Arc<dyn ChatHandlerService>>,
     Form(form): Form<ToolToggle>,
-) -> impl IntoResponse {
+) -> Response {
     let result = if form.enabled {
         handler.enable_tool(&form.tool).await
     } else {
@@ -40,8 +40,8 @@ async fn toggle_tool(
     };
 
     match result {
-        Ok(_) => (StatusCode::OK, "Tool status updated".to_string()),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Ok(_) => (StatusCode::OK, "Tool status updated").into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
 }
 
