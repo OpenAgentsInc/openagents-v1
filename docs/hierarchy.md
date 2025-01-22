@@ -1,6 +1,6 @@
 # Project Hierarchy
 
-Generated on: 2025-01-21 16:05:12
+Generated on: 2025-01-22 16:37:41
 
 ### Structure
 
@@ -34,6 +34,7 @@ Generated on: 2025-01-21 16:05:12
 |   |   |-- 138.md
 |   |   |-- 139.md
 |   |   `-- 140.md
+|   |-- chat.md
 |   |-- chat_template.md
 |   |-- configuration.md
 |   |-- hierarchy.md
@@ -44,7 +45,9 @@ Generated on: 2025-01-21 16:05:12
 |   |-- rust-setup.md
 |   |-- solver-streaming.md
 |   |-- solver.md
-|   `-- templates.md
+|   |-- templates.md
+|   |-- tool_test_failures.md
+|   `-- tools.md
 |-- migrations/
 |   |-- 20250110000000_initial.sql
 |   |-- 20250112001624_create_subscriptions_table.sql
@@ -71,6 +74,11 @@ Generated on: 2025-01-21 16:05:12
 |   |   |   |-- middleware.rs
 |   |   |   |-- mod.rs
 |   |   |   `-- routes.rs
+|   |   |-- routes/
+|   |   |   |-- tests/
+|   |   |   |   `-- mod.rs
+|   |   |   |-- chat.rs
+|   |   |   `-- mod.rs
 |   |   |-- services/
 |   |   |   |-- solver/
 |   |   |   |   |-- ws/
@@ -88,15 +96,31 @@ Generated on: 2025-01-21 16:05:12
 |   |   |   |-- mod.rs
 |   |   |   |-- openrouter.rs
 |   |   |   `-- repomap.rs
+|   |   |-- tools/
+|   |   |   |-- external.rs
+|   |   |   |-- factory.rs
+|   |   |   |-- files.rs
+|   |   |   |-- github.rs
+|   |   |   `-- mod.rs
+|   |   |-- ws/
+|   |   |   |-- handlers/
+|   |   |   |   |-- chat.rs
+|   |   |   |   |-- mod.rs
+|   |   |   |   `-- solver.rs
+|   |   |   |-- mod.rs
+|   |   |   |-- transport.rs
+|   |   |   `-- types.rs
 |   |   |-- config.rs
-|   |   `-- mod.rs
+|   |   |-- mod.rs
+|   |   `-- test_utils.rs
 |   |-- configuration.rs
 |   |-- database.rs
 |   |-- emailoptin.rs
 |   |-- filters.rs
 |   |-- lib.rs
 |   |-- main.rs
-|   `-- template_filters.rs
+|   |-- template_filters.rs
+|   `-- test_utils.rs
 |-- styles/
 |   `-- tailwind.css
 |-- templates/
@@ -104,6 +128,15 @@ Generated on: 2025-01-21 16:05:12
 |   |   |-- dashboard.html
 |   |   `-- login.html
 |   |-- components/
+|   |   |-- chat/
+|   |   |   |-- error_section.html
+|   |   |   |-- head_scripts.html
+|   |   |   |-- header.html
+|   |   |   |-- main_chat.html
+|   |   |   |-- sidebar_left.html
+|   |   |   |-- sidebar_right.html
+|   |   |   |-- templates.html
+|   |   |   `-- websocket_scripts.html
 |   |   |-- features.html
 |   |   `-- hero.html
 |   |-- layouts/
@@ -115,6 +148,7 @@ Generated on: 2025-01-21 16:05:12
 |   |   |-- blog.html
 |   |   |-- blog_post.html
 |   |   |-- nav.html
+|   |   |-- ui.html
 |   |   `-- video.html
 |   |-- pages/
 |   |   |-- 404.html
@@ -165,5 +199,5 @@ Generated on: 2025-01-21 16:05:12
 |-- spec.yaml
 `-- tailwind.config.cjs
 
-29 directories, 130 files
+35 directories, 158 files
 ```
