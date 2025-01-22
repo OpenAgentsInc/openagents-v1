@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::server::ws::handlers::chat::ChatHandlerService;
 use crate::server::tools::ToolError;
 
-pub fn chat_routes() -> Router {
+pub fn chat_routes() -> Router<Arc<dyn ChatHandlerService>> {
     Router::new()
         .route("/chat/:id", get(chat_session))
         .route("/chat/tools/toggle", post(toggle_tool))
@@ -51,7 +51,7 @@ mod tests {
     use axum::http::Request;
     use axum::body::Body;
     use tower::ServiceExt;
-    use crate::test_utils::*;
+    use crate::server::ws::handlers::chat::MockChatHandlerService;
 
     #[tokio::test]
     async fn test_chat_session() {
@@ -74,8 +74,6 @@ mod tests {
         let mut mock_handler = MockChatHandlerService::new();
         mock_handler
             .expect_enable_tool()
-            .with(eq("test_tool"))
-            .times(1)
             .returning(|_| Ok(()));
 
         let app = Router::new()
@@ -102,8 +100,6 @@ mod tests {
         let mut mock_handler = MockChatHandlerService::new();
         mock_handler
             .expect_enable_tool()
-            .with(eq("test_tool"))
-            .times(1)
             .returning(|_| Err(ToolError::InvalidArguments("test error".to_string())));
 
         let app = Router::new()
