@@ -140,10 +140,15 @@ mod tests {
         tx.send(StreamUpdate::Content("test response".to_string())).await.unwrap();
         drop(tx);
 
-        let rx_clone = rx.clone();
         mock_deepseek
             .expect_chat_stream()
-            .returning(move |_, _| rx_clone);
+            .returning(move |_, _| {
+                let (new_tx, new_rx) = mpsc::channel(32);
+                tokio::spawn(async move {
+                    let _ = new_tx.send(StreamUpdate::Content("test response".to_string())).await;
+                });
+                new_rx
+            });
 
         let handler = ChatHandler::new(
             mock_ws,
@@ -169,7 +174,19 @@ mod tests {
             .expect_execute()
             .returning(|_| Ok("tool result".to_string()));
 
-        let mock_tool = Arc::new(mock_tool) as Arc<dyn Tool>;
+        mock_tool
+            .expect_name()
+            .returning(|| "test_tool");
+
+        mock_tool
+            .expect_description()
+            .returning(|| "Test tool description");
+
+        mock_tool
+            .expect_parameters()
+            .returning(|| json!({}));
+
+        let mock_tool = Arc::new(mock_tool) as Arc<dyn Tool + Send + Sync>;
         mock_factory
             .expect_create_executor()
             .returning(move |_| Some(mock_tool.clone()));
