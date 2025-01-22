@@ -1,6 +1,7 @@
 use axum::Router;
 use tower_http::cors::CorsLayer;
 
+pub mod admin;
 pub mod routes;
 pub mod services;
 pub mod tools;
