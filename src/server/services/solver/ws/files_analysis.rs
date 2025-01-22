@@ -3,6 +3,7 @@ use crate::server::services::{
     solver::ws::types::{SolverStage, SolverUpdate},
     StreamUpdate,
 };
+use crate::server::ws::handlers::chat::DeepSeekService;
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -17,14 +18,14 @@ impl super::super::SolverService {
         update_tx: broadcast::Sender<SolverUpdate>,
     ) -> Result<(Vec<String>, String)> {
         let files_prompt = format!(
-            "Given this GitHub repository map:\n\n{}\n\n\
-            And this GitHub issue:\nTitle: {}\nDescription: {}\n\n\
-            Based on the repository structure and issue description, analyze which files would be most relevant to review for solving this issue.\n\
-            Consider:\n\
-            1. Files that would need to be modified\n\
-            2. Related files for context\n\
-            3. Test files that would need updating\n\
-            4. Configuration files if relevant\n\n\
+            "Given this GitHub repository map:\\n\\n{}\\n\\n\
+            And this GitHub issue:\\nTitle: {}\\nDescription: {}\\n\\n\
+            Based on the repository structure and issue description, analyze which files would be most relevant to review for solving this issue.\\n\
+            Consider:\\n\
+            1. Files that would need to be modified\\n\
+            2. Related files for context\\n\
+            3. Test files that would need updating\\n\
+            4. Configuration files if relevant\\n\\n\
             Format your final answer as a markdown list with one file per line, starting each line with a hyphen (-).",
             repomap,
             issue.title,
@@ -37,7 +38,7 @@ impl super::super::SolverService {
         let files_state_clone = files_state.clone();
 
         // Stream the files analysis
-        let mut stream = self.deepseek_service.chat_stream(files_prompt, true).await;
+        let mut stream = self.deepseek_service.chat_stream(files_prompt, vec![]).await;
 
         while let Some(update) = stream.recv().await {
             match update {
