@@ -1,5 +1,6 @@
 use std::error::Error as StdError;
 use std::fmt;
+use std::sync::Arc;
 use serde_json::Value;
 use mockall::automock;
 use async_trait::async_trait;
@@ -43,6 +44,42 @@ pub struct Function {
 pub trait ToolExecutor: Send + Sync {
     fn available_tools(&self) -> Vec<Function>;
     async fn execute_tool(&self, name: &str, args: Value) -> Result<String, ToolError>;
+}
+
+pub struct ToolExecutorFactory {
+    tools: Vec<Arc<dyn Tool>>,
+}
+
+impl ToolExecutorFactory {
+    pub fn new() -> Self {
+        Self {
+            tools: Vec::new(),
+        }
+    }
+
+    pub fn register_tool(&mut self, tool: Arc<dyn Tool>) {
+        self.tools.push(tool);
+    }
+}
+
+impl crate::server::ws::handlers::chat::ToolExecutorFactory for ToolExecutorFactory {
+    fn create_executor(&self, tool_name: &str) -> Option<Arc<dyn Tool>> {
+        self.tools.iter()
+            .find(|tool| tool.name() == tool_name)
+            .cloned()
+    }
+
+    fn list_tools(&self) -> Vec<String> {
+        self.tools.iter()
+            .map(|tool| tool.name().to_string())
+            .collect()
+    }
+}
+
+impl Default for ToolExecutorFactory {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
