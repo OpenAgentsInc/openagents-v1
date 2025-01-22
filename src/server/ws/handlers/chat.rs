@@ -136,9 +136,7 @@ mod tests {
         let mut mock_deepseek = MockDeepSeekService::new();
         let mock_factory = Arc::new(MockToolExecutorFactory::new());
 
-        let (tx, rx) = mpsc::channel(32);
-        tx.send(StreamUpdate::Content("test response".to_string())).await.unwrap();
-        drop(tx);
+        let (_tx, _rx) = mpsc::channel(32);
 
         mock_deepseek
             .expect_chat_stream()
@@ -168,7 +166,7 @@ mod tests {
         let mock_ws = Arc::new(MockWebSocketStateService::new());
         let mock_deepseek = Arc::new(MockDeepSeekService::new());
         let mut mock_factory = MockToolExecutorFactory::new();
-        let mut mock_tool = MockTool::new();
+        let mut mock_tool = crate::server::tools::MockTool::new();
 
         mock_tool
             .expect_execute()
@@ -186,7 +184,7 @@ mod tests {
             .expect_parameters()
             .returning(|| json!({}));
 
-        let mock_tool = Arc::new(mock_tool) as Arc<dyn Tool + Send + Sync>;
+        let mock_tool = Arc::new(mock_tool);
         mock_factory
             .expect_create_executor()
             .returning(move |_| Some(mock_tool.clone()));
