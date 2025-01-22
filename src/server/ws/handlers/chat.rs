@@ -2,29 +2,32 @@ use std::sync::Arc;
 use serde_json::Value;
 use tokio::sync::mpsc;
 use mockall::automock;
+use async_trait::async_trait;
 use crate::server::tools::{Tool, ToolError};
 use crate::server::services::StreamUpdate;
 use crate::server::ws::types::Message;
 
 #[automock]
-pub trait DeepSeekService {
+#[async_trait]
+pub trait DeepSeekService: Send + Sync {
     async fn chat_stream(&self, content: String, tools: Vec<Value>) -> mpsc::Receiver<StreamUpdate>;
 }
 
 #[automock]
-pub trait ToolExecutorFactory {
+pub trait ToolExecutorFactory: Send + Sync {
     fn create_executor(&self, tool_name: &str) -> Option<Arc<dyn Tool>>;
     fn list_tools(&self) -> Vec<String>;
 }
 
 #[automock]
-pub trait WebSocketStateService {
+#[async_trait]
+pub trait WebSocketStateService: Send + Sync {
     async fn broadcast(&self, msg: Message);
 }
 
 #[automock]
-#[cfg_attr(test, automock)]
-pub trait ChatHandlerService {
+#[async_trait]
+pub trait ChatHandlerService: Send + Sync {
     async fn enable_tool(&self, tool: &str) -> Result<(), ToolError>;
     async fn disable_tool(&self, tool: &str) -> Result<(), ToolError>;
     async fn handle_message(&self, msg: Message) -> Result<(), ToolError>;
@@ -50,6 +53,7 @@ impl ChatHandler {
     }
 }
 
+#[async_trait]
 impl ChatHandlerService for ChatHandler {
     async fn enable_tool(&self, tool: &str) -> Result<(), ToolError> {
         // Implementation will be added later
