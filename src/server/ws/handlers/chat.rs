@@ -100,12 +100,10 @@ impl ChatHandler {
                 StreamUpdate::Content(content) => {
                     self.ws_state.broadcast(Message::Chat { content }).await;
                 }
-                StreamUpdate::Tool { name, arguments } => {
-                    self.handle_tool_call(name, arguments).await?;
+                StreamUpdate::Reasoning(content) => {
+                    self.ws_state.broadcast(Message::Chat { content }).await;
                 }
-                StreamUpdate::Error(error) => {
-                    return Err(ToolError::ExecutionFailed(error));
-                }
+                StreamUpdate::Done => break,
             }
         }
 
@@ -126,9 +124,11 @@ impl ChatHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::*;
+    use crate::server::tools::MockTool;
+    use crate::server::ws::handlers::chat::{
+        MockChatHandlerService, MockDeepSeekService, MockToolExecutorFactory, MockWebSocketStateService,
+    };
     use serde_json::json;
-    use std::sync::Arc;
 
     #[tokio::test]
     async fn test_handle_chat() {
@@ -136,7 +136,7 @@ mod tests {
         let mut mock_deepseek = MockDeepSeekService::new();
         let mock_factory = Arc::new(MockToolExecutorFactory::new());
 
-        let (_tx, _rx) = mpsc::channel(32);
+        let (_tx, _rx) = mpsc::channel::<StreamUpdate>(32);
 
         mock_deepseek
             .expect_chat_stream()
@@ -166,7 +166,7 @@ mod tests {
         let mock_ws = Arc::new(MockWebSocketStateService::new());
         let mock_deepseek = Arc::new(MockDeepSeekService::new());
         let mut mock_factory = MockToolExecutorFactory::new();
-        let mut mock_tool = crate::server::tools::MockTool::new();
+        let mut mock_tool = MockTool::new();
 
         mock_tool
             .expect_execute()
