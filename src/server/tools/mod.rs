@@ -2,6 +2,7 @@ use std::error::Error as StdError;
 use std::fmt;
 use serde_json::Value;
 use mockall::automock;
+use async_trait::async_trait;
 
 #[derive(Debug)]
 pub enum ToolError {
@@ -25,7 +26,8 @@ impl fmt::Display for ToolError {
 impl StdError for ToolError {}
 
 #[automock]
-pub trait Tool {
+#[async_trait]
+pub trait Tool: Send + Sync {
     fn name(&self) -> &'static str;
     fn description(&self) -> &'static str;
     fn parameters(&self) -> Value;
@@ -39,7 +41,8 @@ pub struct Function {
 }
 
 #[automock]
-pub trait ToolExecutor {
+#[async_trait]
+pub trait ToolExecutor: Send + Sync {
     fn available_tools(&self) -> Vec<Function>;
     async fn execute_tool(&self, name: &str, args: Value) -> Result<String, ToolError>;
 }
