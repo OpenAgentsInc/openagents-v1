@@ -13,7 +13,7 @@ use crate::server::ws::handlers::chat::ChatHandlerService;
 
 pub fn chat_routes() -> Router<Arc<dyn ChatHandlerService>> {
     Router::new()
-        .route("/chat/:id", get(chat_session))
+        .route("/chat/{id}", get(chat_session))
         .route("/chat/tools/toggle", post(toggle_tool))
 }
 
@@ -55,7 +55,7 @@ mod tests {
     #[tokio::test]
     async fn test_chat_session() {
         let app = Router::new()
-            .route("/chat/:id", get(chat_session))
+            .route("/chat/{id}", get(chat_session))
             .with_state(Arc::new(MockChatHandlerService::new()) as Arc<dyn ChatHandlerService>);
 
         let response = app
