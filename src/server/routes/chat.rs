@@ -10,7 +10,6 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::server::ws::handlers::chat::ChatHandlerService;
-use crate::server::tools::ToolError;
 
 pub fn chat_routes() -> Router {
     Router::new()
@@ -102,7 +101,7 @@ mod tests {
         let mut mock_handler = MockChatHandlerService::new();
         mock_handler
             .expect_enable_tool()
-            .returning(|_| Err(ToolError::InvalidArguments("test error".to_string())));
+            .returning(|_| Err(crate::server::tools::ToolError::InvalidArguments("test error".to_string())));
 
         let app = Router::new()
             .route("/tools/toggle", post(toggle_tool))
