@@ -16,7 +16,7 @@ impl WebSocketTransport {
         }
     }
 
-    pub async fn handle_connection(&self, conn_id: String, mut rx: mpsc::Receiver<Message>) {
+    pub async fn handle_connection(&self, _conn_id: String, mut rx: mpsc::Receiver<Message>) {
         while let Some(msg) = rx.recv().await {
             if let Err(e) = self.chat_handler.handle_message(msg).await {
                 eprintln!("Error handling message: {}", e);
