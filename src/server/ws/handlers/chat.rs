@@ -128,6 +128,7 @@ mod tests {
     use super::*;
     use crate::test_utils::*;
     use serde_json::json;
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn test_handle_chat() {
@@ -139,9 +140,10 @@ mod tests {
         tx.send(StreamUpdate::Content("test response".to_string())).await.unwrap();
         drop(tx);
 
+        let rx_clone = rx.clone();
         mock_deepseek
             .expect_chat_stream()
-            .returning(move |_, _| rx);
+            .returning(move |_, _| rx_clone);
 
         let handler = ChatHandler::new(
             mock_ws,
@@ -167,9 +169,10 @@ mod tests {
             .expect_execute()
             .returning(|_| Ok("tool result".to_string()));
 
+        let mock_tool = Arc::new(mock_tool) as Arc<dyn Tool>;
         mock_factory
             .expect_create_executor()
-            .returning(move |_| Some(Arc::new(mock_tool.clone())));
+            .returning(move |_| Some(mock_tool.clone()));
 
         let handler = ChatHandler::new(
             mock_ws,
