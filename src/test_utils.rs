@@ -14,6 +14,10 @@ mock! {
         fn parameters(&self) -> serde_json::Value;
         async fn execute(&self, args: serde_json::Value) -> Result<String, crate::server::tools::ToolError>;
     }
+
+    impl Clone for Tool {
+        fn clone(&self) -> Self;
+    }
 }
 
 // Create mock for WebSocketStateService trait
@@ -21,6 +25,10 @@ mock! {
     #[async_trait]
     pub WebSocketStateService {
         async fn broadcast(&self, msg: crate::server::ws::types::Message);
+    }
+
+    impl Clone for WebSocketStateService {
+        fn clone(&self) -> Self;
     }
 }
 
@@ -30,6 +38,10 @@ mock! {
     pub DeepSeekService {
         async fn chat_stream(&self, content: String, tools: Vec<serde_json::Value>) -> tokio::sync::mpsc::Receiver<crate::server::services::StreamUpdate>;
     }
+
+    impl Clone for DeepSeekService {
+        fn clone(&self) -> Self;
+    }
 }
 
 // Create mock for ToolExecutorFactory trait
@@ -37,6 +49,10 @@ mock! {
     pub ToolExecutorFactory {
         fn create_executor(&self, tool_name: &str) -> Option<std::sync::Arc<dyn crate::server::tools::Tool>>;
         fn list_tools(&self) -> Vec<String>;
+    }
+
+    impl Clone for ToolExecutorFactory {
+        fn clone(&self) -> Self;
     }
 }
 
@@ -47,6 +63,10 @@ mock! {
         async fn enable_tool(&self, tool: &str) -> Result<(), crate::server::tools::ToolError>;
         async fn disable_tool(&self, tool: &str) -> Result<(), crate::server::tools::ToolError>;
         async fn handle_message(&self, msg: crate::server::ws::types::Message) -> Result<(), crate::server::tools::ToolError>;
+    }
+
+    impl Clone for ChatHandlerService {
+        fn clone(&self) -> Self;
     }
 }
 
