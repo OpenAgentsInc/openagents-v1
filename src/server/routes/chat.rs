@@ -15,6 +15,7 @@ pub fn chat_routes() -> Router {
     Router::new()
         .route("/chat/:id", get(chat_session))
         .route("/chat/tools/toggle", post(toggle_tool))
+        .with_state(())
 }
 
 #[derive(Deserialize)]
@@ -55,7 +56,8 @@ mod tests {
     #[tokio::test]
     async fn test_chat_session() {
         let app = Router::new()
-            .route("/chat/:id", get(chat_session));
+            .route("/chat/:id", get(chat_session))
+            .with_state(());
 
         let response = app
             .oneshot(
