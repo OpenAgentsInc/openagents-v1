@@ -38,7 +38,6 @@ mod tests {
         
         mock_handler
             .expect_handle_message()
-            .times(1)
             .returning(|_| Ok(()));
 
         let transport = WebSocketTransport::new(
@@ -62,7 +61,6 @@ mod tests {
         
         mock_handler
             .expect_handle_message()
-            .times(1)
             .returning(|_| Err(ToolError::ExecutionFailed("test error".to_string())));
 
         let transport = WebSocketTransport::new(
