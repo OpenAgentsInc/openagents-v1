@@ -4,14 +4,12 @@ use crate::server::ws::handlers::chat::ChatHandlerService;
 use crate::server::ws::types::{Message, WebSocketState};
 
 pub struct WebSocketTransport {
-    ws_state: Arc<WebSocketState>,
     chat_handler: Arc<dyn ChatHandlerService>,
 }
 
 impl WebSocketTransport {
     pub fn new(ws_state: Arc<WebSocketState>, chat_handler: Arc<dyn ChatHandlerService>) -> Self {
         Self {
-            ws_state,
             chat_handler,
         }
     }
