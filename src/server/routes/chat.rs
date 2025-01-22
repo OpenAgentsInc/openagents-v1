@@ -11,11 +11,10 @@ use uuid::Uuid;
 
 use crate::server::ws::handlers::chat::ChatHandlerService;
 
-pub fn chat_routes() -> Router {
+pub fn chat_routes() -> Router<Arc<dyn ChatHandlerService>> {
     Router::new()
         .route("/chat/:id", get(chat_session))
         .route("/chat/tools/toggle", post(toggle_tool))
-        .with_state(())
 }
 
 #[derive(Deserialize)]
@@ -57,7 +56,7 @@ mod tests {
     async fn test_chat_session() {
         let app = Router::new()
             .route("/chat/:id", get(chat_session))
-            .with_state(());
+            .with_state(Arc::new(MockChatHandlerService::new()) as Arc<dyn ChatHandlerService>);
 
         let response = app
             .oneshot(
