@@ -1,6 +1,7 @@
 pub mod ws;
 
-use crate::server::services::{DeepSeekService, GitHubService, RepomapService};
+use crate::server::services::{deepseek::DeepSeekService, GitHubService, RepomapService};
+use crate::server::ws::handlers::chat::DeepSeekService as DeepSeekServiceTrait;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
