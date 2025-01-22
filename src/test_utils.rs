@@ -1,9 +1,4 @@
-use mockall::predicate::*;
 use mockall::mock;
-use async_trait::async_trait;
-
-// Re-export mockall predicates
-pub use mockall::predicate::*;
 
 // Create mock for Tool trait
 mock! {
