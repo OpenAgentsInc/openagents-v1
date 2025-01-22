@@ -29,7 +29,7 @@ impl WebSocketTransport {
 mod tests {
     use super::*;
     use crate::server::tools::ToolError;
-    use crate::test_utils::MockChatHandlerService;
+    use crate::server::ws::handlers::chat::MockChatHandlerService;
 
     #[tokio::test]
     async fn test_handle_connection() {
@@ -42,7 +42,7 @@ mod tests {
 
         let transport = WebSocketTransport::new(
             ws_state,
-            Arc::new(mock_handler),
+            Arc::new(mock_handler) as Arc<dyn ChatHandlerService>,
         );
 
         let (tx, rx) = mpsc::channel(32);
@@ -65,7 +65,7 @@ mod tests {
 
         let transport = WebSocketTransport::new(
             ws_state,
-            Arc::new(mock_handler),
+            Arc::new(mock_handler) as Arc<dyn ChatHandlerService>,
         );
 
         let (tx, rx) = mpsc::channel(32);
