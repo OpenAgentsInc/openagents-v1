@@ -28,8 +28,8 @@ impl WebSocketTransport {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::*;
     use crate::server::tools::ToolError;
+    use crate::test_utils::MockChatHandlerService;
 
     #[tokio::test]
     async fn test_handle_connection() {
@@ -38,7 +38,6 @@ mod tests {
         
         mock_handler
             .expect_handle_message()
-            .with(always())
             .times(1)
             .returning(|_| Ok(()));
 
@@ -63,7 +62,6 @@ mod tests {
         
         mock_handler
             .expect_handle_message()
-            .with(always())
             .times(1)
             .returning(|_| Err(ToolError::ExecutionFailed("test error".to_string())));
 
