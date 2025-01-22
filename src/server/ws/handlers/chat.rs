@@ -125,9 +125,6 @@ impl ChatHandler {
 mod tests {
     use super::*;
     use crate::server::tools::MockTool;
-    use crate::server::ws::handlers::chat::{
-        MockChatHandlerService, MockDeepSeekService, MockToolExecutorFactory, MockWebSocketStateService,
-    };
     use serde_json::json;
 
     #[tokio::test]
