@@ -1,8 +1,4 @@
-use axum::{
-    routing::{get, post},
-    Router,
-};
-use std::sync::Arc;
+use axum::Router;
 use tower_http::cors::CorsLayer;
 
 pub mod routes;
