@@ -3,6 +3,7 @@ use crate::server::services::{
     solver::ws::types::{SolverStage, SolverUpdate},
     StreamUpdate,
 };
+use crate::server::ws::handlers::chat::DeepSeekService;
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -18,19 +19,19 @@ impl super::super::SolverService {
         update_tx: broadcast::Sender<SolverUpdate>,
     ) -> Result<(String, String)> {
         let solution_prompt = format!(
-            "Given this GitHub repository map:\n\n{}\n\n\
-            And this GitHub issue:\nTitle: {}\nDescription: {}\n\n\
-            For these relevant files:\n{}\n\n\
-            Generate a detailed solution for this issue. Consider:\n\
-            1. Required code changes\n\
-            2. Test updates needed\n\
-            3. Configuration changes\n\
-            4. Migration steps if needed\n\n\
+            "Given this GitHub repository map:\\n\\n{}\\n\\n\
+            And this GitHub issue:\\nTitle: {}\\nDescription: {}\\n\\n\
+            For these relevant files:\\n{}\\n\\n\
+            Generate a detailed solution for this issue. Consider:\\n\
+            1. Required code changes\\n\
+            2. Test updates needed\\n\
+            3. Configuration changes\\n\
+            4. Migration steps if needed\\n\\n\
             Format your solution in markdown with clear sections and code blocks.",
             repomap,
             issue.title,
             issue.body,
-            files.join("\n")
+            files.join("\\n")
         );
 
         // Create shared state using tokio::sync::Mutex
@@ -41,7 +42,7 @@ impl super::super::SolverService {
         // Stream the solution generation
         let mut stream = self
             .deepseek_service
-            .chat_stream(solution_prompt, true)
+            .chat_stream(solution_prompt, vec![])
             .await;
 
         while let Some(update) = stream.recv().await {
