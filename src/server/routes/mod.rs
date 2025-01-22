@@ -1,16 +1,19 @@
 use axum::Router;
 use tower_http::cors::CorsLayer;
 use std::sync::Arc;
-use crate::server::ws::handlers::chat::ChatHandlerService;
+use crate::server::ws::handlers::chat::ChatHandler;
+use crate::server::ws::types::WebSocketState;
+use crate::server::services::deepseek::DeepSeekService;
+use crate::server::tools::ToolExecutorFactory;
 
 pub mod chat;
 
 pub fn routes() -> Router {
     let cors = CorsLayer::permissive();
-    let chat_handler = Arc::new(crate::server::ws::handlers::chat::ChatHandler::new(
-        Arc::new(crate::server::ws::WebSocketState::new()),
-        Arc::new(crate::server::services::DeepSeekService::new("".to_string())),
-        Arc::new(crate::server::tools::ToolExecutorFactory::new()),
+    let chat_handler = Arc::new(ChatHandler::new(
+        Arc::new(WebSocketState::new()),
+        Arc::new(DeepSeekService::new("".to_string())),
+        Arc::new(ToolExecutorFactory::new()),
     ));
 
     Router::new()
