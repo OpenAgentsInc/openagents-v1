@@ -267,8 +267,8 @@ impl DeepSeekService {
                             Err(e) => {
                                 info!("Stream error: {}", e);
                                 let _ = tx.send(StreamUpdate::Content(
-                                    format!("Stream error: {}", e)
-                                )).await;
+                                                    format!("Stream error: {}", e)
+                                                )).await;
                                 return Err(anyhow!("Stream error: {}", e));
                             }
                         }
@@ -287,8 +287,9 @@ impl DeepSeekService {
             
             if let Err(e) = result {
                 let _ = tx.send(StreamUpdate::Content(format!("Error: {}", e))).await;
+                let _ = tx.send(StreamUpdate::Done).await;
+                return;
             }
-            let _ = tx.send(StreamUpdate::Done).await;
         });
 
         Ok(rx)
