@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use openagents::server::services::{deepseek::DeepSeekService, StreamUpdate};
 use openagents::server::ws::handlers::chat::DeepSeekService as DeepSeekServiceTrait;
 use std::io::{stdout, Write};
