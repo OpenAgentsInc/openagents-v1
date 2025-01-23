@@ -3,6 +3,7 @@ use serde_json::Value;
 use tokio::sync::mpsc;
 use mockall::automock;
 use async_trait::async_trait;
+use tracing::{error, info};
 use crate::server::tools::{Tool, ToolError};
 use crate::server::services::StreamUpdate;
 use crate::server::ws::types::Message;
@@ -80,6 +81,8 @@ impl ChatHandlerService for ChatHandler {
 
 impl ChatHandler {
     async fn handle_chat(&self, content: String) -> Result<(), ToolError> {
+        info!("Handling chat message: {}", content);
+        
         let tools = self.tool_factory.list_tools()
             .into_iter()
             .filter_map(|name| {
@@ -98,12 +101,21 @@ impl ChatHandler {
         while let Some(update) = stream.recv().await {
             match update {
                 StreamUpdate::Content(content) => {
+                    info!("Broadcasting content: {}", content);
                     self.ws_state.broadcast(Message::Chat { content }).await;
                 }
                 StreamUpdate::Reasoning(content) => {
+                    info!("Broadcasting reasoning: {}", content);
                     self.ws_state.broadcast(Message::Chat { content }).await;
                 }
-                StreamUpdate::Done => break,
+                StreamUpdate::ToolCall(name, arguments) => {
+                    info!("Handling tool call: {} with args: {:?}", name, arguments);
+                    self.handle_tool_call(name, arguments).await?;
+                }
+                StreamUpdate::Done => {
+                    info!("Chat stream completed");
+                    break;
+                }
             }
         }
 
@@ -111,11 +123,15 @@ impl ChatHandler {
     }
 
     async fn handle_tool_call(&self, name: String, arguments: Value) -> Result<(), ToolError> {
+        info!("Executing tool: {} with args: {:?}", name, arguments);
+        
         if let Some(tool) = self.tool_factory.create_executor(&name) {
             let result = tool.execute(arguments).await?;
+            info!("Tool execution result: {}", result);
             self.ws_state.broadcast(Message::Chat { content: result }).await;
             Ok(())
         } else {
+            error!("Unknown tool: {}", name);
             Err(ToolError::InvalidArguments(format!("Unknown tool: {}", name)))
         }
     }
