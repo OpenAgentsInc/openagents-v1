@@ -1,65 +1,35 @@
-use axum::{Router, extract::{WebSocketUpgrade, State}};
+use axum::{Router, extract::WebSocketUpgrade};
 use tower_http::cors::CorsLayer;
-use std::{sync::Arc, env};
+use std::sync::Arc;
 use crate::server::ws::{
     handlers::chat::ChatHandler,
-    types::WebSocketState,
-    transport::WebSocketTransport,
+    transport::WebSocketState,
     handler::ws_handler,
 };
-use crate::server::services::deepseek::DeepSeekService;
-use crate::server::tools::ToolExecutorFactory;
+use crate::server::services::DeepSeekService;
 use crate::nostr::axum_relay::RelayState;
 use tokio::sync::broadcast;
 use crate::nostr::db::Database;
-use tracing::warn;
 
 pub mod chat;
 
-// Define the app state struct
-#[derive(Clone)]
-struct AppState {
-    ws_state: Arc<WebSocketState>,
-    transport: Arc<WebSocketTransport>,
-}
-
 async fn ws_route(
     ws: WebSocketUpgrade,
-    State(state): State<AppState>,
+    ws_state: Arc<WebSocketState>,
+    chat_handler: Arc<ChatHandler>,
 ) -> axum::response::Response {
-    ws_handler(ws, state.ws_state, state.transport).await
+    ws_handler(ws, ws_state, chat_handler).await
 }
 
 pub fn routes_with_db(db: Arc<Database>) -> Router {
     let cors = CorsLayer::permissive();
     
-    // Initialize WebSocket state
-    let ws_state = Arc::new(WebSocketState::new());
+    // Initialize WebSocket state and DeepSeek service
+    let deepseek_service = Arc::new(DeepSeekService::new("".to_string()));
+    let ws_state = WebSocketState::new(deepseek_service.clone());
     
-    // Get DeepSeek API key from environment
-    let api_key = env::var("DEEPSEEK_API_KEY").unwrap_or_else(|_| {
-        warn!("DEEPSEEK_API_KEY not found in environment, using empty string");
-        String::new()
-    });
-    
-    // Initialize chat handler
-    let chat_handler = Arc::new(ChatHandler::new(
-        ws_state.clone(),
-        Arc::new(DeepSeekService::new(api_key)),
-        Arc::new(ToolExecutorFactory::new()),
-    ));
-
-    // Initialize WebSocket transport
-    let transport = Arc::new(WebSocketTransport::new(
-        ws_state.clone(),
-        chat_handler.clone(),
-    ));
-
-    // Create app state
-    let app_state = AppState {
-        ws_state: ws_state.clone(),
-        transport: transport.clone(),
-    };
+    // Create handlers
+    let (chat_handler, solver_handler) = WebSocketState::create_handlers(ws_state.clone());
 
     // Initialize Nostr components
     let (event_tx, _) = broadcast::channel(1024);
@@ -67,8 +37,9 @@ pub fn routes_with_db(db: Arc<Database>) -> Router {
 
     Router::new()
         .route("/ws", axum::routing::get(ws_route))
-        .merge(chat::chat_routes().with_state(chat_handler))
-        .with_state(app_state)
+        .merge(chat::chat_routes().with_state(chat_handler.clone()))
         .with_state(relay_state)
+        .with_state(ws_state.clone())
+        .with_state(chat_handler)
         .layer(cors)
 }
