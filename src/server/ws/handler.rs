@@ -34,6 +34,9 @@ async fn handle_socket(socket: WebSocket, ws_state: Arc<WebSocketState>, transpo
     // Store the sender in WebSocketState
     ws_state.add_connection(conn_id.clone(), tx).await;
 
+    // Clone connection ID for the receive task
+    let recv_conn_id = conn_id.clone();
+
     // Spawn task to forward messages from rx to the WebSocket
     let mut send_task = tokio::spawn(async move {
         while let Some(message) = rx.recv().await {
@@ -48,13 +51,13 @@ async fn handle_socket(socket: WebSocket, ws_state: Arc<WebSocketState>, transpo
         while let Some(Ok(message)) = receiver.next().await {
             match message {
                 WsMessage::Text(text) => {
-                    info!("Received message from {}: {}", conn_id, text);
-                    if let Err(e) = transport.handle_message(&text, &conn_id).await {
+                    info!("Received message from {}: {}", recv_conn_id, text);
+                    if let Err(e) = transport.handle_message(&text, &recv_conn_id).await {
                         error!("Error handling message: {}", e);
                     }
                 }
                 WsMessage::Close(_) => {
-                    info!("WebSocket closed by client: {}", conn_id);
+                    info!("WebSocket closed by client: {}", recv_conn_id);
                     break;
                 }
                 _ => {}
