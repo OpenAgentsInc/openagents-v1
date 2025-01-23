@@ -5,5 +5,4 @@ pub mod handler;
 
 pub use handlers::chat::ChatHandler;
 pub use handlers::solver::SolverHandler;
-pub use types::{Message, WebSocketState};
-pub use handler::ws_handler;
+pub use types::{ChatMessage, WebSocketMessage};
