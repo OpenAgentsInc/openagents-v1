@@ -7,10 +7,11 @@ use crate::server::services::deepseek::DeepSeekService;
 use crate::server::tools::ToolExecutorFactory;
 use crate::nostr::axum_relay::{ws_handler, RelayState};
 use tokio::sync::broadcast;
+use crate::nostr::db::Database;
 
 pub mod chat;
 
-pub fn routes() -> Router {
+pub fn routes_with_db(db: Arc<Database>) -> Router {
     let cors = CorsLayer::permissive();
     
     // Initialize WebSocket state
@@ -25,7 +26,7 @@ pub fn routes() -> Router {
 
     // Initialize Nostr components
     let (event_tx, _) = broadcast::channel(1024);
-    let relay_state = Arc::new(RelayState::new(event_tx));
+    let relay_state = Arc::new(RelayState::new(event_tx, db));
 
     Router::new()
         .route("/ws", axum::routing::get(ws_handler))
