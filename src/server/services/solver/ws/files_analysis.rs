@@ -66,6 +66,9 @@ impl super::super::SolverService {
                         })),
                     });
                 }
+                StreamUpdate::ToolCall(name, args) => {
+                    info!("Tool call received in files analysis (ignored): {} {:?}", name, args);
+                }
                 StreamUpdate::Done => break,
             }
         }
