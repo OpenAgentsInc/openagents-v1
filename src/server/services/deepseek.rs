@@ -258,6 +258,7 @@ impl DeepSeekService {
                                                 let _ = tx.send(StreamUpdate::Content(
                                                     format!("Error parsing response: {}", e)
                                                 )).await;
+                                                return Err(anyhow!("Failed to parse response: {}", e));
                                             }
                                         }
                                     }
@@ -268,7 +269,7 @@ impl DeepSeekService {
                                 let _ = tx.send(StreamUpdate::Content(
                                     format!("Stream error: {}", e)
                                 )).await;
-                                break;
+                                return Err(anyhow!("Stream error: {}", e));
                             }
                         }
                     }
@@ -278,16 +279,16 @@ impl DeepSeekService {
                     let _ = tx.send(StreamUpdate::Content(
                         format!("Request error: {}", e)
                     )).await;
+                    return Err(anyhow!("Request error: {}", e));
                 }
             }
-            let _ = tx.send(StreamUpdate::Done).await;
             Ok(())
             }.await;
             
             if let Err(e) = result {
                 let _ = tx.send(StreamUpdate::Content(format!("Error: {}", e))).await;
-                let _ = tx.send(StreamUpdate::Done).await;
             }
+            let _ = tx.send(StreamUpdate::Done).await;
         });
 
         Ok(rx)
