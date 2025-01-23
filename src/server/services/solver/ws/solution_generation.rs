@@ -71,6 +71,9 @@ impl super::super::SolverService {
                         })),
                     });
                 }
+                StreamUpdate::ToolCall(name, args) => {
+                    info!("Tool call received in solution generation (ignored): {} {:?}", name, args);
+                }
                 StreamUpdate::Done => break,
             }
         }
