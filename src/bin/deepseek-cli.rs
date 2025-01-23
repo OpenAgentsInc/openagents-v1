@@ -27,6 +27,11 @@ enum Commands {
         /// The message to reason about
         message: String,
     },
+    /// Calculator mode using function calling
+    Calculate {
+        /// The expression to calculate
+        expression: String,
+    },
 }
 
 fn print_colored(text: &str, color: Color) -> Result<()> {
@@ -47,6 +52,24 @@ async fn main() -> Result<()> {
     let service = DeepSeekService::new(api_key);
 
     match cli.command {
+        Commands::Calculate { expression } => {
+            let mut stream = service.chat_stream_with_tools(format!("Calculate: {}", expression), true).await;
+            print_colored("Calculating...\n", Color::Blue)?;
+            while let Some(update) = stream.recv().await {
+                match update {
+                    StreamUpdate::Content(text) => {
+                        print_colored(&text, Color::Green)?;
+                        stdout().flush()?;
+                    }
+                    StreamUpdate::Reasoning(r) => {
+                        print_colored(&format!("\nReasoning: {}", r), Color::Yellow)?;
+                        stdout().flush()?;
+                    }
+                    StreamUpdate::Done => break,
+                }
+            }
+            println!();
+        }
         Commands::Chat { message } => {
             if cli.no_stream {
                 let (response, _) = service.chat(message, false).await?;
