@@ -25,6 +25,7 @@ struct ChatRequest {
     stream: bool,
     temperature: f32,
     max_tokens: Option<i32>,
+    tools: Option<Vec<Tool>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -82,6 +83,7 @@ struct StreamChoice {
 struct StreamDelta {
     content: Option<String>,
     reasoning_content: Option<String>,
+    tool_calls: Option<Vec<ToolCall>>,
 }
 
 #[derive(Debug, Deserialize)]
