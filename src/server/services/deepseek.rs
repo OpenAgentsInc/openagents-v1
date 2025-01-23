@@ -86,7 +86,7 @@ impl DeepSeekService {
         Self {
             client: Client::new(),
             api_key,
-            base_url: "https://api.deepseek.com".to_string(),
+            base_url: "https://api.deepseek.ai/v1".to_string(),
         }
     }
 
@@ -116,9 +116,9 @@ impl DeepSeekService {
         info!("Making chat request to DeepSeek API");
 
         let model = if use_reasoner {
-            "deepseek-reasoner"
+            "deepseek-chat-v1-33b"
         } else {
-            "deepseek-chat"
+            "deepseek-chat-v1-33b"
         };
 
         let messages = vec![ChatMessage {
@@ -168,7 +168,7 @@ impl DeepSeekServiceTrait for DeepSeekService {
         let base_url = self.base_url.clone();
 
         tokio::spawn(async move {
-            let model = "deepseek-chat";
+            let model = "deepseek-chat-v1-33b";
 
             let messages = vec![ChatMessage {
                 role: "user".to_string(),
@@ -196,6 +196,11 @@ impl DeepSeekServiceTrait for DeepSeekService {
 
             match response {
                 Ok(response) => {
+                    if !response.status().is_success() {
+                        error!("API error: {} - {}", response.status(), response.text().await.unwrap_or_default());
+                        return;
+                    }
+
                     let mut stream = response.bytes_stream();
                     let mut buffer = String::new();
 
