@@ -5,6 +5,7 @@ use openagents::server::ws::handlers::chat::DeepSeekService as DeepSeekServiceTr
 use std::io::{stdout, Write};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 use serde_json::json;
+use tracing::info;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -61,8 +62,13 @@ async fn main() -> Result<()> {
                             print!("{}", text);
                             stdout().flush()?;
                         }
+                        StreamUpdate::Reasoning(_) => {
+                            // Ignore reasoning in chat mode
+                        }
+                        StreamUpdate::ToolCall(name, args) => {
+                            info!("Tool call received (ignored): {} {:?}", name, args);
+                        }
                         StreamUpdate::Done => break,
-                        _ => {}
                     }
                 }
                 println!();
@@ -94,6 +100,9 @@ async fn main() -> Result<()> {
                             }
                             print!("{}", c);
                             stdout().flush()?;
+                        }
+                        StreamUpdate::ToolCall(name, args) => {
+                            info!("Tool call received (ignored): {} {:?}", name, args);
                         }
                         StreamUpdate::Done => break,
                     }
