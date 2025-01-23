@@ -129,26 +129,53 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_chat() {
-        let mock_ws = Arc::new(MockWebSocketStateService::new());
+        let mut mock_ws = MockWebSocketStateService::new();
         let mut mock_deepseek = MockDeepSeekService::new();
-        let mock_factory = Arc::new(MockToolExecutorFactory::new());
+        let mut mock_factory = MockToolExecutorFactory::new();
 
-        let (_tx, _rx) = mpsc::channel::<StreamUpdate>(32);
+        // Set up mock_factory expectations
+        mock_factory
+            .expect_list_tools()
+            .returning(|| vec!["test_tool".to_string()]);
 
+        let mut mock_tool = MockTool::new();
+        mock_tool
+            .expect_name()
+            .returning(|| "test_tool");
+        mock_tool
+            .expect_description()
+            .returning(|| "Test tool description");
+        mock_tool
+            .expect_parameters()
+            .returning(|| json!({}));
+
+        let mock_tool = Arc::new(mock_tool);
+        mock_factory
+            .expect_create_executor()
+            .returning(move |_| Some(mock_tool.clone()));
+
+        // Set up mock_ws expectations
+        mock_ws
+            .expect_broadcast()
+            .withf(|msg| matches!(msg, Message::Chat { content } if content == "test response"))
+            .returning(|_| ());
+
+        // Set up mock_deepseek expectations
         mock_deepseek
             .expect_chat_stream()
             .returning(move |_, _| {
                 let (new_tx, new_rx) = mpsc::channel(32);
                 tokio::spawn(async move {
                     let _ = new_tx.send(StreamUpdate::Content("test response".to_string())).await;
+                    let _ = new_tx.send(StreamUpdate::Done).await;
                 });
                 new_rx
             });
 
         let handler = ChatHandler::new(
-            mock_ws,
+            Arc::new(mock_ws),
             Arc::new(mock_deepseek),
-            mock_factory,
+            Arc::new(mock_factory),
         );
 
         let result = handler.handle_message(Message::Chat {
@@ -160,11 +187,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_tool_call() {
-        let mock_ws = Arc::new(MockWebSocketStateService::new());
+        let mut mock_ws = MockWebSocketStateService::new();
         let mock_deepseek = Arc::new(MockDeepSeekService::new());
         let mut mock_factory = MockToolExecutorFactory::new();
         let mut mock_tool = MockTool::new();
 
+        // Set up mock_tool expectations
         mock_tool
             .expect_execute()
             .returning(|_| Ok("tool result".to_string()));
@@ -181,13 +209,19 @@ mod tests {
             .expect_parameters()
             .returning(|| json!({}));
 
+        // Set up mock_ws expectations
+        mock_ws
+            .expect_broadcast()
+            .withf(|msg| matches!(msg, Message::Chat { content } if content == "tool result"))
+            .returning(|_| ());
+
         let mock_tool = Arc::new(mock_tool);
         mock_factory
             .expect_create_executor()
             .returning(move |_| Some(mock_tool.clone()));
 
         let handler = ChatHandler::new(
-            mock_ws,
+            Arc::new(mock_ws),
             mock_deepseek,
             Arc::new(mock_factory),
         );
