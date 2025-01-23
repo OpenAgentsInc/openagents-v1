@@ -12,7 +12,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::{broadcast, mpsc};
-use tracing::error;
+use tracing::{error, info};
 
 use super::{
     db::{Database, EventFilter},
@@ -219,15 +219,17 @@ async fn handle_socket(socket: WebSocket, state: Arc<RelayState>) {
 
     // Spawn task to forward broadcast events to this client
     let send_task = tokio::spawn(async move {
-        let last_active = Instant::now();
+        let mut last_active = Instant::now();
         let mut heartbeat_interval = tokio::time::interval(HEARTBEAT_INTERVAL);
 
         loop {
             tokio::select! {
                 Some(msg) = rx.recv() => {
-                    if sender.send(msg).await.is_err() {
+                    if let Err(e) = sender.send(msg).await {
+                        error!("Failed to send message: {}", e);
                         break;
                     }
+                    last_active = Instant::now();
                 }
                 Ok(event) = event_rx.recv() => {
                     let subs = state_clone.subscriptions.read().await;
@@ -237,20 +239,25 @@ async fn handle_socket(socket: WebSocket, state: Arc<RelayState>) {
                                 let msg = Message::Text(
                                     format!(r#"["EVENT", "{}", {}]"#, sub_id, event_json).into()
                                 );
-                                if sender.send(msg).await.is_err() {
+                                if let Err(e) = sender.send(msg).await {
+                                    error!("Failed to send event: {}", e);
                                     return;
                                 }
                             }
                         }
                     }
+                    last_active = Instant::now();
                 }
                 _ = heartbeat_interval.tick() => {
                     if Instant::now().duration_since(last_active) > CLIENT_TIMEOUT {
+                        info!("Client timed out");
                         return;
                     }
-                    if sender.send(Message::Ping(Bytes::new())).await.is_err() {
+                    if let Err(e) = sender.send(Message::Ping(Bytes::new())).await {
+                        error!("Failed to send ping: {}", e);
                         return;
                     }
+                    last_active = Instant::now();
                 }
             }
         }
@@ -258,16 +265,30 @@ async fn handle_socket(socket: WebSocket, state: Arc<RelayState>) {
 
     // Handle incoming messages
     let recv_task = tokio::spawn(async move {
-        while let Some(Ok(msg)) = receiver.next().await {
+        while let Some(msg) = receiver.next().await {
             match msg {
-                Message::Text(text) => {
-                    handle_client_message(&text, &state, &tx_clone).await;
+                Ok(msg) => {
+                    match msg {
+                        Message::Text(text) => {
+                            handle_client_message(&text, &state, &tx_clone).await;
+                        }
+                        Message::Ping(bytes) => {
+                            if let Err(e) = tx_clone.send(Message::Pong(bytes)).await {
+                                error!("Failed to send pong: {}", e);
+                                break;
+                            }
+                        }
+                        Message::Close(_) => {
+                            info!("Client requested close");
+                            break;
+                        }
+                        _ => {}
+                    }
                 }
-                Message::Ping(bytes) => {
-                    let _ = tx_clone.send(Message::Pong(bytes)).await;
+                Err(e) => {
+                    error!("WebSocket receive error: {}", e);
+                    break;
                 }
-                Message::Close(_) => break,
-                _ => {}
             }
         }
     });
@@ -275,10 +296,10 @@ async fn handle_socket(socket: WebSocket, state: Arc<RelayState>) {
     // Wait for either task to finish
     tokio::select! {
         _ = send_task => {
-            error!("Send task completed");
+            info!("Send task completed");
         }
         _ = recv_task => {
-            error!("Receive task completed");
+            info!("Receive task completed");
         }
     }
 }
