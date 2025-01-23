@@ -164,7 +164,8 @@ impl DeepSeekService {
             },
         };
 
-        let handle = tokio::spawn(async move {
+        tokio::spawn(async move {
+            let result: Result<(), anyhow::Error> = async {
             let messages = vec![
                 ChatMessage {
                     role: "system".to_string(),
@@ -280,9 +281,23 @@ impl DeepSeekService {
                 }
             }
             let _ = tx.send(StreamUpdate::Done).await;
+            Ok(())
+            }.await;
+            
+            if let Err(e) = result {
+                let _ = tx.send(StreamUpdate::Content(format!("Error: {}", e))).await;
+                let _ = tx.send(StreamUpdate::Done).await;
+            }
+            Ok(())
+            }.await;
+            
+            if let Err(e) = result {
+                let _ = tx.send(StreamUpdate::Content(format!("Error: {}", e))).await;
+                let _ = tx.send(StreamUpdate::Done).await;
+            }
         });
 
-        rx
+        Ok(rx)
     }
 
     pub async fn chat_stream(
@@ -295,7 +310,8 @@ impl DeepSeekService {
         let api_key = self.api_key.clone();
         let base_url = self.base_url.clone();
 
-        let handle = tokio::spawn(async move {
+        tokio::spawn(async move {
+            let result: Result<(), anyhow::Error> = async {
             let model = if use_reasoner {
                 "deepseek-reasoner"
             } else {
