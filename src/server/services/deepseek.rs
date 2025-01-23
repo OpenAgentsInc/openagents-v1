@@ -164,10 +164,16 @@ impl DeepSeekService {
         };
 
         tokio::spawn(async move {
-            let messages = vec![ChatMessage {
-                role: "user".to_string(),
-                content: prompt,
-            }];
+            let messages = vec![
+                ChatMessage {
+                    role: "system".to_string(),
+                    content: "You are a helpful assistant that can perform calculations. When asked to calculate something, use the calculate function.".to_string(),
+                },
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: prompt,
+                },
+            ];
 
             let request = ChatRequest {
                 model: if use_reasoner {
@@ -212,12 +218,14 @@ impl DeepSeekService {
                                             break;
                                         }
 
+                                        info!("Received data: {}", data);
                                         if let Ok(response) = serde_json::from_str::<StreamResponse>(data) {
                                             if let Some(choice) = response.choices.first() {
                                                 if let Some(ref content) = choice.delta.content {
                                                     let _ = tx.send(StreamUpdate::Content(content.to_string())).await;
                                                 }
                                                 if let Some(ref tool_calls) = choice.delta.tool_calls {
+                                                    info!("Received tool calls: {:?}", tool_calls);
                                                     for tool_call in tool_calls {
                                                         if tool_call.function.name == "calculate" {
                                                             if let Ok(args) = serde_json::from_str::<serde_json::Value>(
