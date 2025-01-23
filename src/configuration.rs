@@ -10,6 +10,22 @@ pub struct Settings {
     #[serde(default)]
     pub database: DatabaseSettings,
     pub application: ApplicationSettings,
+    #[serde(default)]
+    pub deepseek: DeepSeekSettings,
+}
+
+#[derive(serde::Deserialize, Clone)]
+pub struct DeepSeekSettings {
+    #[serde(default)]
+    pub api_key: String,
+}
+
+impl Default for DeepSeekSettings {
+    fn default() -> Self {
+        Self {
+            api_key: String::new(),
+        }
+    }
 }
 
 #[derive(serde::Deserialize, Clone)]
@@ -182,6 +198,12 @@ pub fn get_configuration() -> Result<Settings, ConfigError> {
     debug!("Application settings:");
     debug!("  Host: {}", settings.application.host);
     debug!("  Port: {}", settings.application.port);
+    debug!("DeepSeek settings:");
+    debug!("  API Key: {}", if settings.deepseek.api_key.is_empty() {
+        "Not set"
+    } else {
+        "Set"
+    });
 
     // Only log database settings if DATABASE_URL is not present
     if std::env::var("DATABASE_URL").is_err() {
