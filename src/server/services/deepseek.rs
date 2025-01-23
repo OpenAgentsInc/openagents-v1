@@ -72,6 +72,7 @@ struct StreamChoice {
 #[derive(Debug, Deserialize)]
 struct StreamDelta {
     content: Option<String>,
+    #[allow(dead_code)]
     role: Option<String>,
 }
 
