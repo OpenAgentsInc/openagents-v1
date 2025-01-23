@@ -7,21 +7,16 @@ use axum::{
 };
 use openagents::{
     handle_solver,
-    server::{routes, services::SolverService},
+    server::{app, services::SolverService},
 };
 use serde_json::json;
 use std::{env, path::PathBuf, sync::Arc};
-use tokio::sync::broadcast;
 use tower_http::services::ServeDir;
 use tracing::info;
 
 use openagents::{
     configuration::get_configuration,
     generate_repomap,
-    nostr::{
-        db::Database,
-        axum_relay::RelayState,
-    },
     repomap,
     server::services::RepomapService,
     solver_page, ChatContentTemplate, ChatPageTemplate, ContentTemplate, PageTemplate,
@@ -47,18 +42,6 @@ async fn main() {
     let repomap_service = Arc::new(RepomapService::new(aider_api_key.clone()));
     let solver_service = Arc::new(SolverService::new());
 
-    // Initialize Nostr components
-    let (event_tx, _) = broadcast::channel(1024);
-
-    // Create database connection using configuration
-    let db = Arc::new(
-        Database::new_with_options(configuration.database.connect_options())
-            .await
-            .expect("Failed to connect to database"),
-    );
-
-    let relay_state = Arc::new(RelayState::new(event_tx, db.clone()));
-
     let solver_router = Router::new()
         .route("/", get(solver_page))
         .route("/", post(handle_solver))
@@ -81,8 +64,7 @@ async fn main() {
         .with_state(repomap_service);
 
     // Merge routers
-    let app = main_router
-        .merge(routes::routes_with_db(db)); // Pass database to routes
+    let app = main_router.merge(app().await);
 
     // Get port from environment variable or use default
     let port = std::env::var("PORT")
