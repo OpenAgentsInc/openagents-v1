@@ -1,138 +1,87 @@
-use std::sync::Arc;
-use serde_json::Value;
-use tokio::sync::mpsc;
-use mockall::automock;
+use super::MessageHandler;
+use crate::server::services::DeepSeekService;
+use crate::server::ws::{transport::WebSocketState, types::ChatMessage};
 use async_trait::async_trait;
+use serde_json::json;
+use std::error::Error;
+use std::sync::Arc;
 use tracing::{error, info};
-use crate::server::tools::{Tool, ToolError};
-use crate::server::services::StreamUpdate;
-use crate::server::ws::types::Message;
-
-#[automock]
-#[async_trait]
-pub trait DeepSeekService: Send + Sync {
-    async fn chat_stream(&self, content: String, tools: Vec<Value>) -> mpsc::Receiver<StreamUpdate>;
-}
-
-#[automock]
-pub trait ToolExecutorFactory: Send + Sync {
-    fn create_executor(&self, tool_name: &str) -> Option<Arc<dyn Tool>>;
-    fn list_tools(&self) -> Vec<String>;
-}
-
-#[automock]
-#[async_trait]
-pub trait WebSocketStateService: Send + Sync {
-    async fn broadcast(&self, msg: Message);
-    async fn send_to(&self, id: &str, msg: Message) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
-}
-
-#[automock]
-#[async_trait]
-pub trait ChatHandlerService: Send + Sync {
-    async fn enable_tool(&self, tool: &str) -> Result<(), ToolError>;
-    async fn disable_tool(&self, tool: &str) -> Result<(), ToolError>;
-    async fn handle_message(&self, msg: Message, conn_id: String) -> Result<(), ToolError>;
-}
 
 pub struct ChatHandler {
-    ws_state: Arc<dyn WebSocketStateService>,
-    deepseek_service: Arc<dyn DeepSeekService>,
-    tool_factory: Arc<dyn ToolExecutorFactory>,
+    ws_state: Arc<WebSocketState>,
+    deepseek_service: Arc<DeepSeekService>,
 }
 
 impl ChatHandler {
-    pub fn new(
-        ws_state: Arc<dyn WebSocketStateService>,
-        deepseek_service: Arc<dyn DeepSeekService>,
-        tool_factory: Arc<dyn ToolExecutorFactory>,
-    ) -> Self {
+    pub fn new(ws_state: Arc<WebSocketState>, deepseek_service: Arc<DeepSeekService>) -> Self {
         Self {
             ws_state,
             deepseek_service,
-            tool_factory,
         }
     }
-}
 
-#[async_trait]
-impl ChatHandlerService for ChatHandler {
-    async fn enable_tool(&self, _tool: &str) -> Result<(), ToolError> {
-        // Implementation will be added later
-        Ok(())
-    }
+    async fn process_message(
+        &self,
+        content: String,
+        conn_id: &str,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+        info!("Processing message: {}", content);
 
-    async fn disable_tool(&self, _tool: &str) -> Result<(), ToolError> {
-        // Implementation will be added later
-        Ok(())
-    }
+        // Get streaming response from DeepSeek
+        let mut stream = self.deepseek_service.chat_stream(content, true).await;
 
-    async fn handle_message(&self, msg: Message, conn_id: String) -> Result<(), ToolError> {
-        match msg {
-            Message::Chat { content } => {
-                self.handle_chat(content, &conn_id).await?;
-            }
-            Message::Tool { name, arguments } => {
-                self.handle_tool_call(name, arguments, &conn_id).await?;
-            }
-        }
-        Ok(())
-    }
-}
-
-impl ChatHandler {
-    async fn send_chat_message(&self, content: String, status: &str, conn_id: &str) -> Result<(), ToolError> {
-        let msg_json = serde_json::json!({
-            "type": "chat",
-            "content": content,
-            "sender": "ai",
-            "status": status
-        });
-        let msg_str = serde_json::to_string(&msg_json).unwrap();
-        self.ws_state.send_to(conn_id, Message::Chat { content: msg_str }).await
-            .map_err(|e| ToolError::ExecutionFailed(e.to_string()))
-    }
-
-    async fn handle_chat(&self, content: String, conn_id: &str) -> Result<(), ToolError> {
-        info!("Handling chat message: {}", content);
-        
         // Send "typing" indicator
-        self.send_chat_message("...".to_string(), "typing", conn_id).await?;
+        let typing_json = json!({
+            "type": "chat",
+            "content": "...",
+            "sender": "ai",
+            "status": "typing"
+        });
+        self.ws_state
+            .send_to(conn_id, &typing_json.to_string())
+            .await?;
 
-        let tools = self.tool_factory.list_tools()
-            .into_iter()
-            .filter_map(|name| {
-                self.tool_factory.create_executor(&name).map(|tool| {
-                    serde_json::json!({
-                        "name": tool.name(),
-                        "description": tool.description(),
-                        "parameters": tool.parameters()
-                    })
-                })
-            })
-            .collect();
-
-        let mut stream = self.deepseek_service.chat_stream(content, tools).await;
+        // Accumulate the full response while sending stream updates
         let mut full_response = String::new();
-
         while let Some(update) = stream.recv().await {
             match update {
-                StreamUpdate::Content(content) => {
-                    info!("Streaming content: {}", content);
+                crate::server::services::deepseek::StreamUpdate::Content(content) => {
                     full_response.push_str(&content);
-                    self.send_chat_message(content, "streaming", conn_id).await?;
+
+                    // Send partial response
+                    let response_json = json!({
+                        "type": "chat",
+                        "content": &content,
+                        "sender": "ai",
+                        "status": "streaming"
+                    });
+                    self.ws_state
+                        .send_to(conn_id, &response_json.to_string())
+                        .await?;
                 }
-                StreamUpdate::Reasoning(content) => {
-                    info!("Streaming reasoning: {}", content);
-                    self.send_chat_message(content, "thinking", conn_id).await?;
+                crate::server::services::deepseek::StreamUpdate::Reasoning(reasoning) => {
+                    // Send reasoning update
+                    let reasoning_json = json!({
+                        "type": "chat",
+                        "content": &reasoning,
+                        "sender": "ai",
+                        "status": "thinking"
+                    });
+                    self.ws_state
+                        .send_to(conn_id, &reasoning_json.to_string())
+                        .await?;
                 }
-                StreamUpdate::ToolCall(name, arguments) => {
-                    info!("Handling tool call: {} with args: {:?}", name, arguments);
-                    self.handle_tool_call(name, arguments, conn_id).await?;
-                }
-                StreamUpdate::Done => {
-                    info!("Chat stream completed");
-                    self.send_chat_message(full_response, "complete", conn_id).await?;
+                crate::server::services::deepseek::StreamUpdate::Done => {
+                    // Send final complete message
+                    let response_json = json!({
+                        "type": "chat",
+                        "content": full_response,
+                        "sender": "ai",
+                        "status": "complete"
+                    });
+                    self.ws_state
+                        .send_to(conn_id, &response_json.to_string())
+                        .await?;
                     break;
                 }
             }
@@ -140,163 +89,46 @@ impl ChatHandler {
 
         Ok(())
     }
-
-    async fn handle_tool_call(&self, name: String, arguments: Value, conn_id: &str) -> Result<(), ToolError> {
-        info!("Executing tool: {} with args: {:?}", name, arguments);
-        
-        if let Some(tool) = self.tool_factory.create_executor(&name) {
-            let result = tool.execute(arguments).await?;
-            info!("Tool execution result: {}", result);
-            self.send_chat_message(result, "complete", conn_id).await?;
-            Ok(())
-        } else {
-            error!("Unknown tool: {}", name);
-            Err(ToolError::InvalidArguments(format!("Unknown tool: {}", name)))
-        }
-    }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::server::tools::MockTool;
-    use serde_json::json;
+#[async_trait]
+impl MessageHandler for ChatHandler {
+    type Message = ChatMessage;
 
-    #[tokio::test]
-    async fn test_handle_chat() {
-        let mut mock_ws = MockWebSocketStateService::new();
-        let mut mock_deepseek = MockDeepSeekService::new();
-        let mut mock_factory = MockToolExecutorFactory::new();
-
-        // Set up mock_factory expectations
-        mock_factory
-            .expect_list_tools()
-            .returning(|| vec!["test_tool".to_string()]);
-
-        let mut mock_tool = MockTool::new();
-        mock_tool
-            .expect_name()
-            .returning(|| "test_tool");
-        mock_tool
-            .expect_description()
-            .returning(|| "Test tool description");
-        mock_tool
-            .expect_parameters()
-            .returning(|| json!({}));
-
-        let mock_tool = Arc::new(mock_tool);
-        mock_factory
-            .expect_create_executor()
-            .returning(move |_| Some(mock_tool.clone()));
-
-        // Set up mock_ws expectations
-        mock_ws
-            .expect_send_to()
-            .returning(|_, _| Ok(()));
-
-        // Set up mock_deepseek expectations
-        mock_deepseek
-            .expect_chat_stream()
-            .returning(move |_, _| {
-                let (new_tx, new_rx) = mpsc::channel(32);
-                tokio::spawn(async move {
-                    let _ = new_tx.send(StreamUpdate::Content("test response".to_string())).await;
-                    let _ = new_tx.send(StreamUpdate::Done).await;
-                });
-                new_rx
-            });
-
-        let handler = ChatHandler::new(
-            Arc::new(mock_ws),
-            Arc::new(mock_deepseek),
-            Arc::new(mock_factory),
-        );
-
-        let result = handler.handle_message(
-            Message::Chat {
-                content: "test message".to_string(),
-            },
-            "test-conn-id".to_string()
-        ).await;
-
-        assert!(result.is_ok());
+    async fn handle_message(
+        &self,
+        msg: Self::Message,
+        conn_id: String,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+        info!("Handling chat message: {:?}", msg);
+        match msg {
+            ChatMessage::UserMessage { content } => {
+                match self.process_message(content, &conn_id).await {
+                    Ok(_) => Ok(()),
+                    Err(e) => {
+                        error!("Error processing message: {}", e);
+                        let error_json = json!({
+                            "type": "chat",
+                            "content": format!("Error: {}", e),
+                            "sender": "system",
+                            "status": "error"
+                        });
+                        self.ws_state
+                            .send_to(&conn_id, &error_json.to_string())
+                            .await?;
+                        Ok(())
+                    }
+                }
+            }
+            _ => {
+                error!("Unhandled message type: {:?}", msg);
+                Ok(())
+            }
+        }
     }
 
-    #[tokio::test]
-    async fn test_handle_tool_call() {
-        let mut mock_ws = MockWebSocketStateService::new();
-        let mock_deepseek = Arc::new(MockDeepSeekService::new());
-        let mut mock_factory = MockToolExecutorFactory::new();
-        let mut mock_tool = MockTool::new();
-
-        // Set up mock_tool expectations
-        mock_tool
-            .expect_execute()
-            .returning(|_| Ok("tool result".to_string()));
-
-        mock_tool
-            .expect_name()
-            .returning(|| "test_tool");
-
-        mock_tool
-            .expect_description()
-            .returning(|| "Test tool description");
-
-        mock_tool
-            .expect_parameters()
-            .returning(|| json!({}));
-
-        // Set up mock_ws expectations
-        mock_ws
-            .expect_send_to()
-            .returning(|_, _| Ok(()));
-
-        let mock_tool = Arc::new(mock_tool);
-        mock_factory
-            .expect_create_executor()
-            .returning(move |_| Some(mock_tool.clone()));
-
-        let handler = ChatHandler::new(
-            Arc::new(mock_ws),
-            mock_deepseek,
-            Arc::new(mock_factory),
-        );
-
-        let result = handler.handle_message(
-            Message::Tool {
-                name: "test_tool".to_string(),
-                arguments: json!({"arg": "value"}),
-            },
-            "test-conn-id".to_string()
-        ).await;
-
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_handle_unknown_tool() {
-        let mock_ws = Arc::new(MockWebSocketStateService::new());
-        let mock_deepseek = Arc::new(MockDeepSeekService::new());
-        let mut mock_factory = MockToolExecutorFactory::new();
-
-        mock_factory
-            .expect_create_executor()
-            .returning(|_| None);
-
-        let handler = ChatHandler::new(
-            mock_ws,
-            mock_deepseek,
-            Arc::new(mock_factory),
-        );
-
-        let result = handler.handle_message(
-            Message::Tool {
-                name: "unknown_tool".to_string(),
-                arguments: json!({}),
-            },
-            "test-conn-id".to_string()
-        ).await;
-
-        assert!(matches!(result, Err(ToolError::InvalidArguments(_))));
+    async fn broadcast(&self, _msg: Self::Message) -> Result<(), Box<dyn Error + Send + Sync>> {
+        // Implement if needed
+        Ok(())
     }
 }
