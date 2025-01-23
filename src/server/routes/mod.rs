@@ -7,8 +7,6 @@ use crate::server::services::deepseek::DeepSeekService;
 use crate::server::tools::ToolExecutorFactory;
 use crate::nostr::axum_relay::{ws_handler, RelayState};
 use tokio::sync::broadcast;
-use crate::nostr::db::Database;
-use crate::configuration::get_configuration;
 
 pub mod chat;
 
@@ -27,13 +25,7 @@ pub fn routes() -> Router {
 
     // Initialize Nostr components
     let (event_tx, _) = broadcast::channel(1024);
-    let configuration = get_configuration().expect("Failed to read configuration");
-    let db = Arc::new(
-        Database::new_with_options(configuration.database.connect_options())
-            .await
-            .expect("Failed to connect to database"),
-    );
-    let relay_state = Arc::new(RelayState::new(event_tx, db));
+    let relay_state = Arc::new(RelayState::new(event_tx));
 
     Router::new()
         .route("/ws", axum::routing::get(ws_handler))
