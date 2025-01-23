@@ -24,6 +24,7 @@ pub trait ToolExecutorFactory: Send + Sync {
 #[async_trait]
 pub trait WebSocketStateService: Send + Sync {
     async fn broadcast(&self, msg: Message);
+    async fn send_to(&self, id: &str, msg: Message) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
 }
 
 #[automock]
@@ -31,7 +32,7 @@ pub trait WebSocketStateService: Send + Sync {
 pub trait ChatHandlerService: Send + Sync {
     async fn enable_tool(&self, tool: &str) -> Result<(), ToolError>;
     async fn disable_tool(&self, tool: &str) -> Result<(), ToolError>;
-    async fn handle_message(&self, msg: Message) -> Result<(), ToolError>;
+    async fn handle_message(&self, msg: Message, conn_id: String) -> Result<(), ToolError>;
 }
 
 pub struct ChatHandler {
@@ -66,13 +67,13 @@ impl ChatHandlerService for ChatHandler {
         Ok(())
     }
 
-    async fn handle_message(&self, msg: Message) -> Result<(), ToolError> {
+    async fn handle_message(&self, msg: Message, conn_id: String) -> Result<(), ToolError> {
         match msg {
             Message::Chat { content } => {
-                self.handle_chat(content).await?;
+                self.handle_chat(content, &conn_id).await?;
             }
             Message::Tool { name, arguments } => {
-                self.handle_tool_call(name, arguments).await?;
+                self.handle_tool_call(name, arguments, &conn_id).await?;
             }
         }
         Ok(())
@@ -80,9 +81,13 @@ impl ChatHandlerService for ChatHandler {
 }
 
 impl ChatHandler {
-    async fn handle_chat(&self, content: String) -> Result<(), ToolError> {
+    async fn handle_chat(&self, content: String, conn_id: &str) -> Result<(), ToolError> {
         info!("Handling chat message: {}", content);
         
+        // Send "typing" indicator
+        let typing_msg = Message::Chat { content: "...".to_string() };
+        let _ = self.ws_state.send_to(conn_id, typing_msg).await;
+
         let tools = self.tool_factory.list_tools()
             .into_iter()
             .filter_map(|name| {
@@ -97,23 +102,29 @@ impl ChatHandler {
             .collect();
 
         let mut stream = self.deepseek_service.chat_stream(content, tools).await;
+        let mut full_response = String::new();
 
         while let Some(update) = stream.recv().await {
             match update {
                 StreamUpdate::Content(content) => {
-                    info!("Broadcasting content: {}", content);
-                    self.ws_state.broadcast(Message::Chat { content }).await;
+                    info!("Streaming content: {}", content);
+                    full_response.push_str(&content);
+                    let msg = Message::Chat { content };
+                    let _ = self.ws_state.send_to(conn_id, msg).await;
                 }
                 StreamUpdate::Reasoning(content) => {
-                    info!("Broadcasting reasoning: {}", content);
-                    self.ws_state.broadcast(Message::Chat { content }).await;
+                    info!("Streaming reasoning: {}", content);
+                    let msg = Message::Chat { content };
+                    let _ = self.ws_state.send_to(conn_id, msg).await;
                 }
                 StreamUpdate::ToolCall(name, arguments) => {
                     info!("Handling tool call: {} with args: {:?}", name, arguments);
-                    self.handle_tool_call(name, arguments).await?;
+                    self.handle_tool_call(name, arguments, conn_id).await?;
                 }
                 StreamUpdate::Done => {
                     info!("Chat stream completed");
+                    let msg = Message::Chat { content: full_response };
+                    let _ = self.ws_state.send_to(conn_id, msg).await;
                     break;
                 }
             }
@@ -122,13 +133,14 @@ impl ChatHandler {
         Ok(())
     }
 
-    async fn handle_tool_call(&self, name: String, arguments: Value) -> Result<(), ToolError> {
+    async fn handle_tool_call(&self, name: String, arguments: Value, conn_id: &str) -> Result<(), ToolError> {
         info!("Executing tool: {} with args: {:?}", name, arguments);
         
         if let Some(tool) = self.tool_factory.create_executor(&name) {
             let result = tool.execute(arguments).await?;
             info!("Tool execution result: {}", result);
-            self.ws_state.broadcast(Message::Chat { content: result }).await;
+            let msg = Message::Chat { content: result };
+            let _ = self.ws_state.send_to(conn_id, msg).await;
             Ok(())
         } else {
             error!("Unknown tool: {}", name);
@@ -172,9 +184,8 @@ mod tests {
 
         // Set up mock_ws expectations
         mock_ws
-            .expect_broadcast()
-            .withf(|msg| matches!(msg, Message::Chat { content } if content == "test response"))
-            .returning(|_| ());
+            .expect_send_to()
+            .returning(|_, _| Ok(()));
 
         // Set up mock_deepseek expectations
         mock_deepseek
@@ -194,9 +205,12 @@ mod tests {
             Arc::new(mock_factory),
         );
 
-        let result = handler.handle_message(Message::Chat {
-            content: "test message".to_string(),
-        }).await;
+        let result = handler.handle_message(
+            Message::Chat {
+                content: "test message".to_string(),
+            },
+            "test-conn-id".to_string()
+        ).await;
 
         assert!(result.is_ok());
     }
@@ -227,9 +241,8 @@ mod tests {
 
         // Set up mock_ws expectations
         mock_ws
-            .expect_broadcast()
-            .withf(|msg| matches!(msg, Message::Chat { content } if content == "tool result"))
-            .returning(|_| ());
+            .expect_send_to()
+            .returning(|_, _| Ok(()));
 
         let mock_tool = Arc::new(mock_tool);
         mock_factory
@@ -242,10 +255,13 @@ mod tests {
             Arc::new(mock_factory),
         );
 
-        let result = handler.handle_message(Message::Tool {
-            name: "test_tool".to_string(),
-            arguments: json!({"arg": "value"}),
-        }).await;
+        let result = handler.handle_message(
+            Message::Tool {
+                name: "test_tool".to_string(),
+                arguments: json!({"arg": "value"}),
+            },
+            "test-conn-id".to_string()
+        ).await;
 
         assert!(result.is_ok());
     }
@@ -266,10 +282,13 @@ mod tests {
             Arc::new(mock_factory),
         );
 
-        let result = handler.handle_message(Message::Tool {
-            name: "unknown_tool".to_string(),
-            arguments: json!({}),
-        }).await;
+        let result = handler.handle_message(
+            Message::Tool {
+                name: "unknown_tool".to_string(),
+                arguments: json!({}),
+            },
+            "test-conn-id".to_string()
+        ).await;
 
         assert!(matches!(result, Err(ToolError::InvalidArguments(_))));
     }
