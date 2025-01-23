@@ -1,5 +1,5 @@
 use super::MessageHandler;
-use crate::server::services::DeepSeekService;
+use crate::server::services::{DeepSeekService, DeepSeekServiceTrait};
 use crate::server::ws::{transport::WebSocketState, types::ChatMessage};
 use async_trait::async_trait;
 use serde_json::json;
@@ -45,7 +45,7 @@ impl ChatHandler {
         let mut full_response = String::new();
         while let Some(update) = stream.recv().await {
             match update {
-                crate::server::services::deepseek::StreamUpdate::Content(content) => {
+                crate::server::services::StreamUpdate::Content(content) => {
                     full_response.push_str(&content);
 
                     // Send partial response
@@ -59,7 +59,7 @@ impl ChatHandler {
                         .send_to(conn_id, &response_json.to_string())
                         .await?;
                 }
-                crate::server::services::deepseek::StreamUpdate::Reasoning(reasoning) => {
+                crate::server::services::StreamUpdate::Reasoning(reasoning) => {
                     // Send reasoning update
                     let reasoning_json = json!({
                         "type": "chat",
@@ -71,7 +71,7 @@ impl ChatHandler {
                         .send_to(conn_id, &reasoning_json.to_string())
                         .await?;
                 }
-                crate::server::services::deepseek::StreamUpdate::Done => {
+                crate::server::services::StreamUpdate::Done => {
                     // Send final complete message
                     let response_json = json!({
                         "type": "chat",
