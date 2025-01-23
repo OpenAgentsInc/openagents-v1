@@ -32,7 +32,7 @@ async fn main() {
 
     info!("🚀 Starting OpenAgents...");
 
-    let assets_path = PathBuf::from(env!(("CARGO_MANIFEST_DIR"))).join("assets");
+    let assets_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
 
     // Load configuration
     let configuration = get_configuration().expect("Failed to read configuration");
