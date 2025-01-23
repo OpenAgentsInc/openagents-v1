@@ -54,6 +54,16 @@ impl WebSocketState {
         let mut connections = self.connections.write().await;
         connections.remove(id);
     }
+
+    pub async fn send_to(&self, id: &str, msg: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let connections = self.connections.read().await;
+        if let Some(tx) = connections.get(id) {
+            tx.send(WsMessage::Text(msg.to_string()))?;
+            Ok(())
+        } else {
+            Err("Connection not found".into())
+        }
+    }
 }
 
 #[async_trait]
@@ -64,6 +74,11 @@ impl WebSocketStateService for WebSocketState {
         for tx in connections.values() {
             let _ = tx.send(WsMessage::Text(msg_str.clone().into()));
         }
+    }
+
+    async fn send_to(&self, id: &str, msg: Message) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let msg_str = serde_json::to_string(&msg)?;
+        self.send_to(id, &msg_str).await
     }
 }
 
