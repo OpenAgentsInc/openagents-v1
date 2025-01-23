@@ -288,13 +288,6 @@ impl DeepSeekService {
                 let _ = tx.send(StreamUpdate::Content(format!("Error: {}", e))).await;
                 let _ = tx.send(StreamUpdate::Done).await;
             }
-            Ok(())
-            }.await;
-            
-            if let Err(e) = result {
-                let _ = tx.send(StreamUpdate::Content(format!("Error: {}", e))).await;
-                let _ = tx.send(StreamUpdate::Done).await;
-            }
         });
 
         Ok(rx)
@@ -404,9 +397,17 @@ impl DeepSeekService {
                     info!("Request error: {}", e);
                 }
             }
+            let _ = tx.send(StreamUpdate::Done).await;
+            Ok(())
+            }.await;
+            
+            if let Err(e) = result {
+                let _ = tx.send(StreamUpdate::Content(format!("Error: {}", e))).await;
+                let _ = tx.send(StreamUpdate::Done).await;
+            }
         });
 
-        rx
+        Ok(rx)
     }
 
     async fn chat_internal(
