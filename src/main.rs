@@ -19,8 +19,8 @@ use openagents::{
     configuration::get_configuration,
     generate_repomap,
     nostr::{
-        axum_relay::{ws_handler, RelayState},
         db::Database,
+        axum_relay::RelayState,
     },
     repomap,
     server::services::RepomapService,
@@ -59,11 +59,6 @@ async fn main() {
 
     let relay_state = Arc::new(RelayState::new(event_tx, db));
 
-    // Create separate routers for different state types
-    let nostr_router = Router::new()
-        .route("/ws", get(ws_handler))
-        .with_state(relay_state);
-
     let solver_router = Router::new()
         .route("/", get(solver_page))
         .route("/", post(handle_solver))
@@ -87,7 +82,6 @@ async fn main() {
 
     // Merge routers
     let app = main_router
-        .nest("/nostr", nostr_router)
         .merge(routes::routes()); // Use the correct routes function
 
     // Get port from environment variable or use default
