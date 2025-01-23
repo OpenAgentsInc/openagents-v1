@@ -3,7 +3,7 @@ use futures::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
-use tracing::info;
+use tracing::{error, info};
 use async_trait::async_trait;
 use serde_json::Value;
 use crate::server::ws::handlers::chat::DeepSeekService as DeepSeekServiceTrait;
@@ -28,6 +28,8 @@ struct ChatRequest {
     stream: bool,
     temperature: f32,
     max_tokens: Option<i32>,
+    tools: Option<Vec<Value>>,
+    tool_choice: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -57,6 +59,7 @@ struct StreamChoice {
 struct StreamDelta {
     content: Option<String>,
     reasoning_content: Option<String>,
+    tool_calls: Option<Vec<ToolCall>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -68,7 +71,14 @@ struct StreamResponse {
 pub enum StreamUpdate {
     Content(String),
     Reasoning(String),
+    ToolCall(String, Value),
     Done,
+}
+
+#[derive(Debug, Deserialize)]
+struct ToolCall {
+    name: String,
+    arguments: Value,
 }
 
 impl DeepSeekService {
@@ -93,7 +103,7 @@ impl DeepSeekService {
         prompt: String,
         use_reasoner: bool,
     ) -> Result<(String, Option<String>)> {
-        self.chat_internal(prompt, use_reasoner, false).await
+        self.chat_internal(prompt, use_reasoner, false, None).await
     }
 
     async fn chat_internal(
@@ -101,6 +111,7 @@ impl DeepSeekService {
         prompt: String,
         use_reasoner: bool,
         stream: bool,
+        tools: Option<Vec<Value>>,
     ) -> Result<(String, Option<String>)> {
         info!("Making chat request to DeepSeek API");
 
@@ -121,6 +132,8 @@ impl DeepSeekService {
             stream,
             temperature: 0.7,
             max_tokens: None,
+            tools,
+            tool_choice: Some("auto".to_string()),
         };
 
         let url = format!("{}/chat/completions", self.base_url);
@@ -148,7 +161,7 @@ impl DeepSeekService {
 
 #[async_trait]
 impl DeepSeekServiceTrait for DeepSeekService {
-    async fn chat_stream(&self, content: String, _tools: Vec<Value>) -> mpsc::Receiver<StreamUpdate> {
+    async fn chat_stream(&self, content: String, tools: Vec<Value>) -> mpsc::Receiver<StreamUpdate> {
         let (tx, rx) = mpsc::channel(100);
         let client = self.client.clone();
         let api_key = self.api_key.clone();
@@ -168,6 +181,8 @@ impl DeepSeekServiceTrait for DeepSeekService {
                 stream: true,
                 temperature: 0.7,
                 max_tokens: None,
+                tools: Some(tools),
+                tool_choice: Some("auto".to_string()),
             };
 
             let url = format!("{}/chat/completions", base_url);
@@ -192,7 +207,6 @@ impl DeepSeekServiceTrait for DeepSeekService {
 
                                 // Process complete SSE messages
                                 while let Some(pos) = buffer.find('\n') {
-                                    // Extract the line and update buffer without borrowing issues
                                     let line = buffer[..pos].trim().to_string();
                                     buffer = buffer[pos + 1..].to_string();
 
@@ -202,8 +216,7 @@ impl DeepSeekServiceTrait for DeepSeekService {
                                             break;
                                         }
 
-                                        if let Ok(response) =
-                                            serde_json::from_str::<StreamResponse>(data)
+                                        if let Ok(response) = serde_json::from_str::<StreamResponse>(data)
                                         {
                                             if let Some(choice) = response.choices.first() {
                                                 if let Some(ref content) = choice.delta.content {
@@ -213,14 +226,23 @@ impl DeepSeekServiceTrait for DeepSeekService {
                                                         ))
                                                         .await;
                                                 }
-                                                if let Some(ref reasoning) =
-                                                    choice.delta.reasoning_content
+                                                if let Some(ref reasoning) = choice.delta.reasoning_content
                                                 {
                                                     let _ = tx
                                                         .send(StreamUpdate::Reasoning(
                                                             reasoning.to_string(),
                                                         ))
                                                         .await;
+                                                }
+                                                if let Some(ref tool_calls) = choice.delta.tool_calls {
+                                                    for tool_call in tool_calls {
+                                                        let _ = tx
+                                                            .send(StreamUpdate::ToolCall(
+                                                                tool_call.name.clone(),
+                                                                tool_call.arguments.clone(),
+                                                            ))
+                                                            .await;
+                                                    }
                                                 }
                                                 if choice.finish_reason.is_some() {
                                                     let _ = tx.send(StreamUpdate::Done).await;
@@ -232,14 +254,14 @@ impl DeepSeekServiceTrait for DeepSeekService {
                                 }
                             }
                             Err(e) => {
-                                info!("Stream error: {}", e);
+                                error!("Stream error: {}", e);
                                 break;
                             }
                         }
                     }
                 }
                 Err(e) => {
-                    info!("Request error: {}", e);
+                    error!("Request error: {}", e);
                 }
             }
         });
