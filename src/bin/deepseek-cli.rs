@@ -6,7 +6,7 @@ use openagents::server::ws::handlers::chat::DeepSeekService as DeepSeekServiceTr
 use std::io::{stdout, Write};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 use serde_json::json;
-use tracing::{info, Level};
+use tracing::{error, info};
 use tracing_subscriber::FmtSubscriber;
 
 #[derive(Parser)]
@@ -45,8 +45,8 @@ fn print_colored(text: &str, color: Color) -> Result<()> {
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize logging
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::INFO)
+    FmtSubscriber::builder()
+        .with_max_level(tracing::Level::INFO)
         .with_target(false)
         .with_thread_ids(false)
         .with_file(false)
