@@ -12,7 +12,7 @@ use openagents::{
 use serde_json::json;
 use std::{env, path::PathBuf, sync::Arc};
 use tower_http::services::ServeDir;
-use tracing::info;
+use tracing::{info, warn};
 
 use openagents::{
     configuration::get_configuration,
@@ -32,10 +32,16 @@ async fn main() {
 
     info!("🚀 Starting OpenAgents...");
 
-    let assets_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
+    let assets_path = PathBuf::from(env!(("CARGO_MANIFEST_DIR"))).join("assets");
 
     // Load configuration
-    let _configuration = get_configuration().expect("Failed to read configuration");
+    let configuration = get_configuration().expect("Failed to read configuration");
+
+    // Check for DeepSeek API key
+    if configuration.deepseek.api_key.is_empty() {
+        warn!("DEEPSEEK_API_KEY not found in environment or configuration");
+        warn!("Chat functionality will not work without an API key");
+    }
 
     // Initialize repomap service
     let aider_api_key = env::var("AIDER_API_KEY").unwrap_or_else(|_| "".to_string());
@@ -66,13 +72,9 @@ async fn main() {
     // Merge routers
     let app = main_router.merge(app().await);
 
-    // Get port from environment variable or use default
-    let port = std::env::var("PORT")
-        .ok()
-        .and_then(|p| p.parse::<u16>().ok())
-        .unwrap_or(8000);
-
-    let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+    // Use configuration for host and port
+    let port = configuration.application.port;
+    let host = configuration.application.host;
     let address = format!("{}:{}", host, port);
 
     let listener = tokio::net::TcpListener::bind(&address).await.unwrap();
