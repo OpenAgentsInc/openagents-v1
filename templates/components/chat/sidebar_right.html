@@ -1,5 +1,5 @@
-<div class="w-64 h-full bg-white border-l border-gray-200 p-4">
-    <h3 class="text-sm font-medium text-gray-500 mb-4">Available Tools</h3>
+<div class="w-64 h-full bg-black border-l border-gray-800 p-4">
+    <h3 class="text-sm font-medium text-white mb-4">Available Tools</h3>
     
     <div class="space-y-3">
         <!-- GitHub Tools -->
@@ -9,21 +9,21 @@
                 <label class="flex items-center space-x-3">
                     <input type="checkbox" 
                            name="tool-fetch_github_issue" 
-                           class="h-4 w-4 text-blue-600 rounded border-gray-300"
+                           class="h-4 w-4 text-blue-600 rounded border-gray-700 bg-gray-900"
                            hx-post="/chat/tools/toggle"
                            hx-trigger="change"
                            hx-swap="none">
-                    <span class="text-sm text-gray-700">Fetch GitHub Issue</span>
+                    <span class="text-sm text-white">Fetch GitHub Issue</span>
                 </label>
 
                 <label class="flex items-center space-x-3">
                     <input type="checkbox"
                            name="tool-create_pull_request"
-                           class="h-4 w-4 text-blue-600 rounded border-gray-300"
+                           class="h-4 w-4 text-blue-600 rounded border-gray-700 bg-gray-900"
                            hx-post="/chat/tools/toggle" 
                            hx-trigger="change"
                            hx-swap="none">
-                    <span class="text-sm text-gray-700">Create Pull Request</span>
+                    <span class="text-sm text-white">Create Pull Request</span>
                 </label>
             </div>
         </div>
@@ -35,41 +35,41 @@
                 <label class="flex items-center space-x-3">
                     <input type="checkbox"
                            name="tool-view_file"
-                           class="h-4 w-4 text-blue-600 rounded border-gray-300"
+                           class="h-4 w-4 text-blue-600 rounded border-gray-700 bg-gray-900"
                            hx-post="/chat/tools/toggle" 
                            hx-trigger="change"
                            hx-swap="none">
-                    <span class="text-sm text-gray-700">View File</span>
+                    <span class="text-sm text-white">View File</span>
                 </label>
 
                 <label class="flex items-center space-x-3">
                     <input type="checkbox"
                            name="tool-view_hierarchy"
-                           class="h-4 w-4 text-blue-600 rounded border-gray-300"
+                           class="h-4 w-4 text-blue-600 rounded border-gray-700 bg-gray-900"
                            hx-post="/chat/tools/toggle" 
                            hx-trigger="change"
                            hx-swap="none">
-                    <span class="text-sm text-gray-700">View Directory</span>
+                    <span class="text-sm text-white">View Directory</span>
                 </label>
 
                 <label class="flex items-center space-x-3">
                     <input type="checkbox"
                            name="tool-create_file"
-                           class="h-4 w-4 text-blue-600 rounded border-gray-300"
+                           class="h-4 w-4 text-blue-600 rounded border-gray-700 bg-gray-900"
                            hx-post="/chat/tools/toggle" 
                            hx-trigger="change"
                            hx-swap="none">
-                    <span class="text-sm text-gray-700">Create File</span>
+                    <span class="text-sm text-white">Create File</span>
                 </label>
 
                 <label class="flex items-center space-x-3">
                     <input type="checkbox"
                            name="tool-rewrite_file"
-                           class="h-4 w-4 text-blue-600 rounded border-gray-300"
+                           class="h-4 w-4 text-blue-600 rounded border-gray-700 bg-gray-900"
                            hx-post="/chat/tools/toggle" 
                            hx-trigger="change"
                            hx-swap="none">
-                    <span class="text-sm text-gray-700">Update File</span>
+                    <span class="text-sm text-white">Update File</span>
                 </label>
             </div>
         </div>
@@ -81,21 +81,21 @@
                 <label class="flex items-center space-x-3">
                     <input type="checkbox"
                            name="tool-scrape_webpage"
-                           class="h-4 w-4 text-blue-600 rounded border-gray-300"
+                           class="h-4 w-4 text-blue-600 rounded border-gray-700 bg-gray-900"
                            hx-post="/chat/tools/toggle" 
                            hx-trigger="change"
                            hx-swap="none">
-                    <span class="text-sm text-gray-700">Scrape Webpage</span>
+                    <span class="text-sm text-white">Scrape Webpage</span>
                 </label>
 
                 <label class="flex items-center space-x-3">
                     <input type="checkbox"
                            name="tool-search_team_knowledge"
-                           class="h-4 w-4 text-blue-600 rounded border-gray-300"
+                           class="h-4 w-4 text-blue-600 rounded border-gray-700 bg-gray-900"
                            hx-post="/chat/tools/toggle" 
                            hx-trigger="change"
                            hx-swap="none">
-                    <span class="text-sm text-gray-700">Search Knowledge</span>
+                    <span class="text-sm text-white">Search Knowledge</span>
                 </label>
             </div>
         </div>
@@ -104,7 +104,7 @@
     <!-- Tool Status -->
     <div class="mt-6">
         <h4 class="text-xs font-medium text-gray-400 mb-2">Tool Status</h4>
-        <div id="tool-status" class="text-sm text-gray-500">
+        <div id="tool-status" class="text-sm text-white">
             No tools in use
         </div>
     </div>
@@ -112,7 +112,7 @@
     <!-- Tool Documentation -->
     <div class="mt-6">
         <h4 class="text-xs font-medium text-gray-400 mb-2">Documentation</h4>
-        <div class="text-sm text-gray-500">
+        <div class="text-sm text-white">
             <p class="mb-2">Tools allow the AI to:</p>
             <ul class="list-disc list-inside space-y-1">
                 <li>View and edit files</li>
@@ -131,7 +131,7 @@
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
-        <span class="tool-name"></span>
+        <span class="tool-name text-white"></span>
     </div>
 </template>
 
