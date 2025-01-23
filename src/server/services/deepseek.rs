@@ -163,9 +163,10 @@ impl DeepSeekService {
             .send()
             .await?;
 
-        if !response.status().is_success() {
+        let status = response.status();
+        if !status.is_success() {
             let error_text = response.text().await?;
-            error!("API error: {} - {}", response.status(), error_text);
+            error!("API error: {} - {}", status, error_text);
             return Err(anyhow::anyhow!("API error: {}", error_text));
         }
 
@@ -231,9 +232,10 @@ impl DeepSeekServiceTrait for DeepSeekService {
 
             match response {
                 Ok(response) => {
-                    if !response.status().is_success() {
+                    let status = response.status();
+                    if !status.is_success() {
                         let error_text = response.text().await.unwrap_or_default();
-                        error!("API error: {} - {}", response.status(), error_text);
+                        error!("API error: {} - {}", status, error_text);
                         return;
                     }
 
