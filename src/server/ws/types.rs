@@ -58,7 +58,7 @@ impl WebSocketState {
     pub async fn send_to(&self, id: &str, msg: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let connections = self.connections.read().await;
         if let Some(tx) = connections.get(id) {
-            tx.send(WsMessage::Text(msg.to_string()))?;
+            tx.send(WsMessage::Text(msg.to_string().into()))?;
             Ok(())
         } else {
             Err("Connection not found".into())
