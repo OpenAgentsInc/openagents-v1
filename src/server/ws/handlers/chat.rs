@@ -81,12 +81,23 @@ impl ChatHandlerService for ChatHandler {
 }
 
 impl ChatHandler {
+    async fn send_chat_message(&self, content: String, status: &str, conn_id: &str) -> Result<(), ToolError> {
+        let msg_json = serde_json::json!({
+            "type": "chat",
+            "content": content,
+            "sender": "ai",
+            "status": status
+        });
+        let msg_str = serde_json::to_string(&msg_json).unwrap();
+        self.ws_state.send_to(conn_id, Message::Chat { content: msg_str }).await
+            .map_err(|e| ToolError::ExecutionFailed(e.to_string()))
+    }
+
     async fn handle_chat(&self, content: String, conn_id: &str) -> Result<(), ToolError> {
         info!("Handling chat message: {}", content);
         
         // Send "typing" indicator
-        let typing_msg = Message::Chat { content: "...".to_string() };
-        let _ = self.ws_state.send_to(conn_id, typing_msg).await;
+        self.send_chat_message("...".to_string(), "typing", conn_id).await?;
 
         let tools = self.tool_factory.list_tools()
             .into_iter()
@@ -109,13 +120,11 @@ impl ChatHandler {
                 StreamUpdate::Content(content) => {
                     info!("Streaming content: {}", content);
                     full_response.push_str(&content);
-                    let msg = Message::Chat { content };
-                    let _ = self.ws_state.send_to(conn_id, msg).await;
+                    self.send_chat_message(content, "streaming", conn_id).await?;
                 }
                 StreamUpdate::Reasoning(content) => {
                     info!("Streaming reasoning: {}", content);
-                    let msg = Message::Chat { content };
-                    let _ = self.ws_state.send_to(conn_id, msg).await;
+                    self.send_chat_message(content, "thinking", conn_id).await?;
                 }
                 StreamUpdate::ToolCall(name, arguments) => {
                     info!("Handling tool call: {} with args: {:?}", name, arguments);
@@ -123,8 +132,7 @@ impl ChatHandler {
                 }
                 StreamUpdate::Done => {
                     info!("Chat stream completed");
-                    let msg = Message::Chat { content: full_response };
-                    let _ = self.ws_state.send_to(conn_id, msg).await;
+                    self.send_chat_message(full_response, "complete", conn_id).await?;
                     break;
                 }
             }
@@ -139,8 +147,7 @@ impl ChatHandler {
         if let Some(tool) = self.tool_factory.create_executor(&name) {
             let result = tool.execute(arguments).await?;
             info!("Tool execution result: {}", result);
-            let msg = Message::Chat { content: result };
-            let _ = self.ws_state.send_to(conn_id, msg).await;
+            self.send_chat_message(result, "complete", conn_id).await?;
             Ok(())
         } else {
             error!("Unknown tool: {}", name);
