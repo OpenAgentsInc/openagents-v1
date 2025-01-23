@@ -18,7 +18,7 @@ struct ChatMessage {
     content: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Default)]
 struct ChatRequest {
     model: String,
     messages: Vec<ChatMessage>,
@@ -290,6 +290,7 @@ impl DeepSeekService {
                 stream: true,
                 temperature: 0.7,
                 max_tokens: None,
+                tools: None,
             };
 
             let url = format!("{}/chat/completions", base_url);
@@ -394,6 +395,7 @@ impl DeepSeekService {
             stream,
             temperature: 0.7,
             max_tokens: None,
+            tools: None,
         };
 
         let url = format!("{}/chat/completions", self.base_url);
