@@ -1,4 +1,4 @@
-use axum::Router;
+use axum::{Router, extract::WebSocketUpgrade};
 use tower_http::cors::CorsLayer;
 use std::sync::Arc;
 use crate::server::ws::{
@@ -14,6 +14,14 @@ use tokio::sync::broadcast;
 use crate::nostr::db::Database;
 
 pub mod chat;
+
+async fn ws_route(
+    ws: WebSocketUpgrade,
+    ws_state: Arc<WebSocketState>,
+    transport: Arc<WebSocketTransport>,
+) -> axum::response::Response {
+    ws_handler(ws, ws_state, transport).await
+}
 
 pub fn routes_with_db(db: Arc<Database>) -> Router {
     let cors = CorsLayer::permissive();
@@ -39,12 +47,7 @@ pub fn routes_with_db(db: Arc<Database>) -> Router {
     let relay_state = Arc::new(RelayState::new(event_tx, db));
 
     Router::new()
-        .route(
-            "/ws",
-            axum::routing::get(|ws, ws_state: Arc<WebSocketState>, transport: Arc<WebSocketTransport>| {
-                ws_handler(ws, ws_state, transport)
-            }),
-        )
+        .route("/ws", axum::routing::get(ws_route))
         .merge(chat::chat_routes().with_state(chat_handler))
         .with_state(relay_state)
         .with_state(ws_state)
