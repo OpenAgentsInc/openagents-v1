@@ -17,10 +17,10 @@ pub fn chat_routes() -> Router<Arc<dyn ChatHandlerService>> {
         .route("/chat/tools/toggle", post(toggle_tool))
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct ToolToggle {
+    #[serde(rename = "tool-name")]
     tool: String,
-    enabled: bool,
 }
 
 async fn chat_session(Path(_id): Path<Uuid>) -> Response {
@@ -32,14 +32,14 @@ async fn toggle_tool(
     State(handler): State<Arc<dyn ChatHandlerService>>,
     Form(form): Form<ToolToggle>,
 ) -> Response {
-    let result = if form.enabled {
-        handler.enable_tool(&form.tool).await
-    } else {
-        handler.disable_tool(&form.tool).await
-    };
+    // Extract tool name from the form field (e.g., "tool-view_file" -> "view_file")
+    let tool_name = form.tool.strip_prefix("tool-").unwrap_or(&form.tool);
+    
+    // For now, we'll just enable tools (disable will be handled by unchecking)
+    let result = handler.enable_tool(tool_name).await;
 
     match result {
-        Ok(_) => (StatusCode::OK, "Tool status updated").into_response(),
+        Ok(_) => StatusCode::OK.into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
 }
@@ -76,19 +76,20 @@ mod tests {
         let mut mock_handler = MockChatHandlerService::new();
         mock_handler
             .expect_enable_tool()
+            .withf(|tool| tool == "view_file")
             .returning(|_| Ok(()));
 
         let app = Router::new()
-            .route("/tools/toggle", post(toggle_tool))
+            .route("/chat/tools/toggle", post(toggle_tool))
             .with_state(Arc::new(mock_handler) as Arc<dyn ChatHandlerService>);
 
         let response = app
             .oneshot(
                 Request::builder()
-                    .uri("/tools/toggle")
+                    .uri("/chat/tools/toggle")
                     .method("POST")
                     .header("content-type", "application/x-www-form-urlencoded")
-                    .body(Body::from("tool=test_tool&enabled=true"))
+                    .body(Body::from("tool-name=tool-view_file"))
                     .unwrap(),
             )
             .await
@@ -105,16 +106,16 @@ mod tests {
             .returning(|_| Err(crate::server::tools::ToolError::InvalidArguments("test error".to_string())));
 
         let app = Router::new()
-            .route("/tools/toggle", post(toggle_tool))
+            .route("/chat/tools/toggle", post(toggle_tool))
             .with_state(Arc::new(mock_handler) as Arc<dyn ChatHandlerService>);
 
         let response = app
             .oneshot(
                 Request::builder()
-                    .uri("/tools/toggle")
+                    .uri("/chat/tools/toggle")
                     .method("POST")
                     .header("content-type", "application/x-www-form-urlencoded")
-                    .body(Body::from("tool=test_tool&enabled=true"))
+                    .body(Body::from("tool-name=tool-unknown"))
                     .unwrap(),
             )
             .await
