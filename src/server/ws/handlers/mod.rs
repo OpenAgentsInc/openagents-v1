@@ -13,5 +13,6 @@ pub trait MessageHandler {
         msg: Self::Message,
         conn_id: String,
     ) -> Result<(), Box<dyn Error + Send + Sync>>;
+
     async fn broadcast(&self, msg: Self::Message) -> Result<(), Box<dyn Error + Send + Sync>>;
 }
