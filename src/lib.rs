@@ -6,6 +6,7 @@ pub mod nostr;
 pub mod server;
 
 pub use server::services::handle_solver;
+pub use server::app;
 
 use askama::Template;
 use axum::{
