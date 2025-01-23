@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use dotenv::dotenv;
 use openagents::server::services::{deepseek::DeepSeekService, StreamUpdate};
 use openagents::server::ws::handlers::chat::DeepSeekService as DeepSeekServiceTrait;
 use std::io::{stdout, Write};
@@ -42,10 +43,13 @@ fn print_colored(text: &str, color: Color) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Load .env file if it exists
+    dotenv().ok();
+
     let cli = Cli::parse();
 
     let api_key = std::env::var("DEEPSEEK_API_KEY")
-        .expect("DEEPSEEK_API_KEY environment variable must be set");
+        .expect("DEEPSEEK_API_KEY not found in environment or .env file");
 
     let service = DeepSeekService::new(api_key);
 
