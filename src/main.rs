@@ -57,7 +57,7 @@ async fn main() {
             .expect("Failed to connect to database"),
     );
 
-    let relay_state = Arc::new(RelayState::new(event_tx, db));
+    let relay_state = Arc::new(RelayState::new(event_tx, db.clone()));
 
     let solver_router = Router::new()
         .route("/", get(solver_page))
@@ -82,7 +82,7 @@ async fn main() {
 
     // Merge routers
     let app = main_router
-        .merge(routes::routes()); // Use the correct routes function
+        .merge(routes::routes_with_db(db)); // Pass database to routes
 
     // Get port from environment variable or use default
     let port = std::env::var("PORT")
