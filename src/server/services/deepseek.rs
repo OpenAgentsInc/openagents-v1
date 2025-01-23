@@ -165,7 +165,7 @@ impl DeepSeekService {
         };
 
         tokio::spawn(async move {
-            let result: Result<(), anyhow::Error> = async {
+            let result: Result<(), anyhow::Error> = (async {
             let messages = vec![
                 ChatMessage {
                     role: "system".to_string(),
@@ -282,8 +282,8 @@ impl DeepSeekService {
                     return Err(anyhow!("Request error: {}", e));
                 }
             }
-            Ok(())
-            }.await;
+                Ok(())
+            }).await;
             
             if let Err(e) = result {
                 let _ = tx.send(StreamUpdate::Content(format!("Error: {}", e))).await;
