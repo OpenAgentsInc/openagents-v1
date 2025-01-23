@@ -26,6 +26,7 @@ struct ChatRequest {
     temperature: f32,
     max_tokens: Option<i32>,
     tools: Option<Vec<Tool>>,
+    tool_choice: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -176,17 +177,16 @@ impl DeepSeekService {
             ];
 
             let request = ChatRequest {
-                model: if use_reasoner {
-                    "deepseek-reasoner".to_string()
-                } else {
-                    "deepseek-chat".to_string()
-                },
+                model: "deepseek-chat".to_string(), // Force using chat model for function calling
                 messages,
                 stream: true,
                 temperature: 0.7,
                 tools: Some(vec![calculator_tool]),
-                ..Default::default()
+                tool_choice: Some("auto".to_string()),
+                max_tokens: None,
             };
+
+            info!("Sending request: {:?}", request);
 
             let url = format!("{}/chat/completions", base_url);
             let response = client
@@ -219,7 +219,9 @@ impl DeepSeekService {
                                         }
 
                                         info!("Received data: {}", data);
-                                        if let Ok(response) = serde_json::from_str::<StreamResponse>(data) {
+                                        match serde_json::from_str::<StreamResponse>(data) {
+                                            Ok(response) => {
+                                                info!("Parsed response: {:?}", response);
                                             if let Some(choice) = response.choices.first() {
                                                 if let Some(ref content) = choice.delta.content {
                                                     let _ = tx.send(StreamUpdate::Content(content.to_string())).await;
@@ -249,6 +251,9 @@ impl DeepSeekService {
                                                 if let Some(ref reasoning) = choice.delta.reasoning_content {
                                                     let _ = tx.send(StreamUpdate::Reasoning(reasoning.to_string())).await;
                                                 }
+                                            }
+                                            Err(e) => {
+                                                info!("Failed to parse response: {}", e);
                                             }
                                         }
                                     }
