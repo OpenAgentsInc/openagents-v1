@@ -8,7 +8,8 @@
             <div class="space-y-2">
                 <label class="flex items-center space-x-3">
                     <input type="checkbox" 
-                           name="tool-fetch_github_issue" 
+                           name="tool-name" 
+                           value="tool-fetch_github_issue"
                            class="h-4 w-4 text-blue-600 rounded border-gray-700 bg-gray-900"
                            hx-post="/chat/tools/toggle"
                            hx-trigger="change"
@@ -18,7 +19,8 @@
 
                 <label class="flex items-center space-x-3">
                     <input type="checkbox"
-                           name="tool-create_pull_request"
+                           name="tool-name"
+                           value="tool-create_pull_request"
                            class="h-4 w-4 text-blue-600 rounded border-gray-700 bg-gray-900"
                            hx-post="/chat/tools/toggle" 
                            hx-trigger="change"
@@ -34,7 +36,8 @@
             <div class="space-y-2">
                 <label class="flex items-center space-x-3">
                     <input type="checkbox"
-                           name="tool-view_file"
+                           name="tool-name"
+                           value="tool-view_file"
                            class="h-4 w-4 text-blue-600 rounded border-gray-700 bg-gray-900"
                            hx-post="/chat/tools/toggle" 
                            hx-trigger="change"
@@ -44,7 +47,8 @@
 
                 <label class="flex items-center space-x-3">
                     <input type="checkbox"
-                           name="tool-view_hierarchy"
+                           name="tool-name"
+                           value="tool-view_hierarchy"
                            class="h-4 w-4 text-blue-600 rounded border-gray-700 bg-gray-900"
                            hx-post="/chat/tools/toggle" 
                            hx-trigger="change"
@@ -54,7 +58,8 @@
 
                 <label class="flex items-center space-x-3">
                     <input type="checkbox"
-                           name="tool-create_file"
+                           name="tool-name"
+                           value="tool-create_file"
                            class="h-4 w-4 text-blue-600 rounded border-gray-700 bg-gray-900"
                            hx-post="/chat/tools/toggle" 
                            hx-trigger="change"
@@ -64,7 +69,8 @@
 
                 <label class="flex items-center space-x-3">
                     <input type="checkbox"
-                           name="tool-rewrite_file"
+                           name="tool-name"
+                           value="tool-rewrite_file"
                            class="h-4 w-4 text-blue-600 rounded border-gray-700 bg-gray-900"
                            hx-post="/chat/tools/toggle" 
                            hx-trigger="change"
@@ -80,7 +86,8 @@
             <div class="space-y-2">
                 <label class="flex items-center space-x-3">
                     <input type="checkbox"
-                           name="tool-scrape_webpage"
+                           name="tool-name"
+                           value="tool-scrape_webpage"
                            class="h-4 w-4 text-blue-600 rounded border-gray-700 bg-gray-900"
                            hx-post="/chat/tools/toggle" 
                            hx-trigger="change"
@@ -90,7 +97,8 @@
 
                 <label class="flex items-center space-x-3">
                     <input type="checkbox"
-                           name="tool-search_team_knowledge"
+                           name="tool-name"
+                           value="tool-search_team_knowledge"
                            class="h-4 w-4 text-blue-600 rounded border-gray-700 bg-gray-900"
                            hx-post="/chat/tools/toggle" 
                            hx-trigger="change"
@@ -139,7 +147,7 @@
     document.addEventListener('htmx:afterRequest', function(evt) {
         if (evt.detail.path === '/chat/tools/toggle') {
             const checkbox = evt.detail.elt;
-            const toolName = checkbox.name.replace('tool-', '');
+            const toolName = checkbox.value.replace('tool-', '');
             const toolStatus = document.getElementById('tool-status');
             
             if (checkbox.checked) {
