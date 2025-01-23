@@ -1,6 +1,6 @@
 use axum::{Router, extract::{WebSocketUpgrade, State}};
 use tower_http::cors::CorsLayer;
-use std::sync::Arc;
+use std::{sync::Arc, env};
 use crate::server::ws::{
     handlers::chat::ChatHandler,
     types::WebSocketState,
@@ -12,6 +12,7 @@ use crate::server::tools::ToolExecutorFactory;
 use crate::nostr::axum_relay::RelayState;
 use tokio::sync::broadcast;
 use crate::nostr::db::Database;
+use tracing::warn;
 
 pub mod chat;
 
@@ -35,10 +36,16 @@ pub fn routes_with_db(db: Arc<Database>) -> Router {
     // Initialize WebSocket state
     let ws_state = Arc::new(WebSocketState::new());
     
+    // Get DeepSeek API key from environment
+    let api_key = env::var("DEEPSEEK_API_KEY").unwrap_or_else(|_| {
+        warn!("DEEPSEEK_API_KEY not found in environment, using empty string");
+        String::new()
+    });
+    
     // Initialize chat handler
     let chat_handler = Arc::new(ChatHandler::new(
         ws_state.clone(),
-        Arc::new(DeepSeekService::new("".to_string())),
+        Arc::new(DeepSeekService::new(api_key)),
         Arc::new(ToolExecutorFactory::new()),
     ));
 
