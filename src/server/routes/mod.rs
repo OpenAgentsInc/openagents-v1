@@ -1,4 +1,4 @@
-use axum::{Router, extract::WebSocketUpgrade};
+use axum::{Router, extract::{WebSocketUpgrade, State}};
 use tower_http::cors::CorsLayer;
 use std::sync::Arc;
 use crate::server::ws::{
@@ -15,12 +15,18 @@ use crate::nostr::db::Database;
 
 pub mod chat;
 
-async fn ws_route(
-    ws: WebSocketUpgrade,
+// Define the app state struct
+#[derive(Clone)]
+struct AppState {
     ws_state: Arc<WebSocketState>,
     transport: Arc<WebSocketTransport>,
+}
+
+async fn ws_route(
+    ws: WebSocketUpgrade,
+    State(state): State<AppState>,
 ) -> axum::response::Response {
-    ws_handler(ws, ws_state, transport).await
+    ws_handler(ws, state.ws_state, state.transport).await
 }
 
 pub fn routes_with_db(db: Arc<Database>) -> Router {
@@ -42,6 +48,12 @@ pub fn routes_with_db(db: Arc<Database>) -> Router {
         chat_handler.clone(),
     ));
 
+    // Create app state
+    let app_state = AppState {
+        ws_state: ws_state.clone(),
+        transport: transport.clone(),
+    };
+
     // Initialize Nostr components
     let (event_tx, _) = broadcast::channel(1024);
     let relay_state = Arc::new(RelayState::new(event_tx, db));
@@ -49,8 +61,7 @@ pub fn routes_with_db(db: Arc<Database>) -> Router {
     Router::new()
         .route("/ws", axum::routing::get(ws_route))
         .merge(chat::chat_routes().with_state(chat_handler))
+        .with_state(app_state)
         .with_state(relay_state)
-        .with_state(ws_state)
-        .with_state(transport)
         .layer(cors)
 }
