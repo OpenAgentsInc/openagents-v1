@@ -77,7 +77,24 @@ impl WebSocketStateService for WebSocketState {
     }
 
     async fn send_to(&self, id: &str, msg: Message) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let msg_str = serde_json::to_string(&msg)?;
+        let msg_json = match msg {
+            Message::Chat { content } => {
+                serde_json::json!({
+                    "type": "chat",
+                    "content": content,
+                    "sender": "ai",
+                    "status": "streaming"
+                })
+            },
+            Message::Tool { name, arguments } => {
+                serde_json::json!({
+                    "type": "tool",
+                    "name": name,
+                    "arguments": arguments
+                })
+            }
+        };
+        let msg_str = serde_json::to_string(&msg_json)?;
         self.send_to(id, &msg_str).await
     }
 }
