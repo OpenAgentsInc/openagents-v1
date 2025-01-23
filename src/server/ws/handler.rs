@@ -4,32 +4,30 @@ use axum::{
     response::Response,
 };
 use futures::{sink::SinkExt, stream::StreamExt};
-use tokio::sync::mpsc;
 use tracing::{error, info};
-use uuid::Uuid;
 
 use super::{
-    transport::WebSocketTransport,
-    types::WebSocketState,
+    transport::WebSocketState,
+    handlers::chat::ChatHandler,
 };
 
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
     ws_state: Arc<WebSocketState>,
-    transport: Arc<WebSocketTransport>,
+    chat_handler: Arc<ChatHandler>,
 ) -> Response {
-    ws.on_upgrade(|socket| handle_socket(socket, ws_state, transport))
+    ws.on_upgrade(|socket| handle_socket(socket, ws_state, chat_handler))
 }
 
-async fn handle_socket(socket: WebSocket, ws_state: Arc<WebSocketState>, transport: Arc<WebSocketTransport>) {
+async fn handle_socket(socket: WebSocket, ws_state: Arc<WebSocketState>, chat_handler: Arc<ChatHandler>) {
     let (mut sender, mut receiver) = socket.split();
 
-    // Generate a unique connection ID
-    let conn_id = Uuid::new_v4().to_string();
+    // Generate unique connection ID
+    let conn_id = uuid::Uuid::new_v4().to_string();
     info!("New WebSocket connection: {}", conn_id);
 
     // Create a channel for sending messages to the WebSocket
-    let (tx, mut rx) = mpsc::unbounded_channel();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
     // Store the sender in WebSocketState
     ws_state.add_connection(conn_id.clone(), tx).await;
@@ -52,8 +50,20 @@ async fn handle_socket(socket: WebSocket, ws_state: Arc<WebSocketState>, transpo
             match message {
                 WsMessage::Text(text) => {
                     info!("Received message from {}: {}", recv_conn_id, text);
-                    if let Err(e) = transport.handle_message(&text, &recv_conn_id).await {
-                        error!("Error handling message: {}", e);
+                    if let Ok(data) = serde_json::from_str::<serde_json::Value>(&text) {
+                        if let Some(content) = data.get("content") {
+                            if let Some(content_str) = content.as_str() {
+                                let chat_msg = crate::server::ws::types::ChatMessage::UserMessage {
+                                    content: content_str.to_string(),
+                                };
+                                if let Err(e) = chat_handler
+                                    .handle_message(chat_msg, recv_conn_id.clone())
+                                    .await
+                                {
+                                    error!("Error handling chat message: {}", e);
+                                }
+                            }
+                        }
                     }
                 }
                 WsMessage::Close(_) => {
