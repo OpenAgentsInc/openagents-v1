@@ -53,7 +53,7 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Commands::Calculate { expression } => {
-            let mut stream = service.chat_stream_with_tools(format!("Calculate: {}", expression), true).await;
+            let mut stream = service.chat_stream_with_tools(format!("Calculate: {}", expression), true).await?;
             print_colored("Calculating...\n", Color::Blue)?;
             while let Some(update) = stream.recv().await {
                 match update {
@@ -75,7 +75,7 @@ async fn main() -> Result<()> {
                 let (response, _) = service.chat(message, false).await?;
                 println!("{}", response);
             } else {
-                let mut stream = service.chat_stream(message, false).await;
+                let mut stream = service.chat_stream(message, false).await?;
                 while let Some(update) = stream.recv().await {
                     match update {
                         StreamUpdate::Content(text) => {
@@ -101,7 +101,7 @@ async fn main() -> Result<()> {
             } else {
                 print_colored("Reasoning:\n", Color::Yellow)?;
                 let mut in_reasoning = true;
-                let mut stream = service.chat_stream(message, true).await;
+                let mut stream = service.chat_stream(message, true).await?;
                 while let Some(update) = stream.recv().await {
                     match update {
                         StreamUpdate::Reasoning(r) => {

@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use futures::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -139,7 +139,7 @@ impl DeepSeekService {
         &self,
         prompt: String,
         use_reasoner: bool,
-    ) -> mpsc::Receiver<StreamUpdate> {
+    ) -> Result<mpsc::Receiver<StreamUpdate>> {
         let (tx, rx) = mpsc::channel(100);
         let client = self.client.clone();
         let api_key = self.api_key.clone();
@@ -164,7 +164,7 @@ impl DeepSeekService {
             },
         };
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             let messages = vec![
                 ChatMessage {
                     role: "system".to_string(),
@@ -289,13 +289,13 @@ impl DeepSeekService {
         &self,
         prompt: String,
         use_reasoner: bool,
-    ) -> mpsc::Receiver<StreamUpdate> {
+    ) -> Result<mpsc::Receiver<StreamUpdate>> {
         let (tx, rx) = mpsc::channel(100);
         let client = self.client.clone();
         let api_key = self.api_key.clone();
         let base_url = self.base_url.clone();
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             let model = if use_reasoner {
                 "deepseek-reasoner"
             } else {
