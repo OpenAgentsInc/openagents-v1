@@ -22,14 +22,28 @@ struct ChatMessage {
 }
 
 #[derive(Debug, Serialize)]
+struct ResponseFormat {
+    #[serde(rename = "type")]
+    type_: String,
+}
+
+#[derive(Debug, Serialize)]
 struct ChatRequest {
     model: String,
     messages: Vec<ChatMessage>,
     stream: bool,
     temperature: f32,
-    max_tokens: Option<i32>,
+    max_tokens: i32,
+    frequency_penalty: f32,
+    presence_penalty: f32,
+    response_format: ResponseFormat,
+    stop: Option<Vec<String>>,
+    stream_options: Option<Value>,
+    top_p: f32,
     tools: Option<Vec<Value>>,
-    tool_choice: Option<String>,
+    tool_choice: String,
+    logprobs: bool,
+    top_logprobs: Option<Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -40,7 +54,7 @@ struct ChatChoice {
 #[derive(Debug, Deserialize)]
 struct ChatResponseMessage {
     content: String,
-    reasoning_content: Option<String>,
+    role: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -58,8 +72,7 @@ struct StreamChoice {
 #[derive(Debug, Deserialize)]
 struct StreamDelta {
     content: Option<String>,
-    reasoning_content: Option<String>,
-    tool_calls: Option<Vec<ToolCall>>,
+    role: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -75,18 +88,12 @@ pub enum StreamUpdate {
     Done,
 }
 
-#[derive(Debug, Deserialize)]
-struct ToolCall {
-    name: String,
-    arguments: Value,
-}
-
 impl DeepSeekService {
     pub fn new(api_key: String) -> Self {
         Self {
             client: Client::new(),
             api_key,
-            base_url: "https://api.deepseek.ai/v1".to_string(),
+            base_url: "https://api.deepseek.com".to_string(),
         }
     }
 
@@ -103,37 +110,46 @@ impl DeepSeekService {
         prompt: String,
         use_reasoner: bool,
     ) -> Result<(String, Option<String>)> {
-        self.chat_internal(prompt, use_reasoner, false, None).await
+        self.chat_internal(prompt, use_reasoner, false).await
     }
 
     async fn chat_internal(
         &self,
         prompt: String,
-        use_reasoner: bool,
+        _use_reasoner: bool,
         stream: bool,
-        tools: Option<Vec<Value>>,
     ) -> Result<(String, Option<String>)> {
         info!("Making chat request to DeepSeek API");
 
-        let model = if use_reasoner {
-            "deepseek-chat-v1-33b"
-        } else {
-            "deepseek-chat-v1-33b"
-        };
-
-        let messages = vec![ChatMessage {
-            role: "user".to_string(),
-            content: prompt,
-        }];
+        let messages = vec![
+            ChatMessage {
+                role: "system".to_string(),
+                content: "You are a helpful assistant".to_string(),
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: prompt,
+            },
+        ];
 
         let request = ChatRequest {
-            model: model.to_string(),
+            model: "deepseek-chat".to_string(),
             messages,
             stream,
-            temperature: 0.7,
-            max_tokens: None,
-            tools,
-            tool_choice: Some("auto".to_string()),
+            temperature: 1.0,
+            max_tokens: 2048,
+            frequency_penalty: 0.0,
+            presence_penalty: 0.0,
+            response_format: ResponseFormat {
+                type_: "text".to_string(),
+            },
+            stop: None,
+            stream_options: None,
+            top_p: 1.0,
+            tools: None,
+            tool_choice: "none".to_string(),
+            logprobs: false,
+            top_logprobs: None,
         };
 
         let url = format!("{}/chat/completions", self.base_url);
@@ -141,18 +157,22 @@ impl DeepSeekService {
             .client
             .post(&url)
             .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&request)
             .send()
             .await?;
 
+        if !response.status().is_success() {
+            let error_text = response.text().await?;
+            error!("API error: {} - {}", response.status(), error_text);
+            return Err(anyhow::anyhow!("API error: {}", error_text));
+        }
+
         let chat_response: ChatResponse = response.json().await?;
 
         if let Some(choice) = chat_response.choices.first() {
-            Ok((
-                choice.message.content.clone(),
-                choice.message.reasoning_content.clone(),
-            ))
+            Ok((choice.message.content.clone(), None))
         } else {
             Err(anyhow::anyhow!("No response from model"))
         }
@@ -161,34 +181,49 @@ impl DeepSeekService {
 
 #[async_trait]
 impl DeepSeekServiceTrait for DeepSeekService {
-    async fn chat_stream(&self, content: String, tools: Vec<Value>) -> mpsc::Receiver<StreamUpdate> {
+    async fn chat_stream(&self, content: String, _tools: Vec<Value>) -> mpsc::Receiver<StreamUpdate> {
         let (tx, rx) = mpsc::channel(100);
         let client = self.client.clone();
         let api_key = self.api_key.clone();
         let base_url = self.base_url.clone();
 
         tokio::spawn(async move {
-            let model = "deepseek-chat-v1-33b";
-
-            let messages = vec![ChatMessage {
-                role: "user".to_string(),
-                content,
-            }];
+            let messages = vec![
+                ChatMessage {
+                    role: "system".to_string(),
+                    content: "You are a helpful assistant".to_string(),
+                },
+                ChatMessage {
+                    role: "user".to_string(),
+                    content,
+                },
+            ];
 
             let request = ChatRequest {
-                model: model.to_string(),
+                model: "deepseek-chat".to_string(),
                 messages,
                 stream: true,
-                temperature: 0.7,
-                max_tokens: None,
-                tools: Some(tools),
-                tool_choice: Some("auto".to_string()),
+                temperature: 1.0,
+                max_tokens: 2048,
+                frequency_penalty: 0.0,
+                presence_penalty: 0.0,
+                response_format: ResponseFormat {
+                    type_: "text".to_string(),
+                },
+                stop: None,
+                stream_options: None,
+                top_p: 1.0,
+                tools: None,
+                tool_choice: "none".to_string(),
+                logprobs: false,
+                top_logprobs: None,
             };
 
             let url = format!("{}/chat/completions", base_url);
             let response = client
                 .post(&url)
                 .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
                 .header("Authorization", format!("Bearer {}", api_key))
                 .json(&request)
                 .send()
@@ -197,7 +232,8 @@ impl DeepSeekServiceTrait for DeepSeekService {
             match response {
                 Ok(response) => {
                     if !response.status().is_success() {
-                        error!("API error: {} - {}", response.status(), response.text().await.unwrap_or_default());
+                        let error_text = response.text().await.unwrap_or_default();
+                        error!("API error: {} - {}", response.status(), error_text);
                         return;
                     }
 
@@ -230,24 +266,6 @@ impl DeepSeekServiceTrait for DeepSeekService {
                                                             content.to_string(),
                                                         ))
                                                         .await;
-                                                }
-                                                if let Some(ref reasoning) = choice.delta.reasoning_content
-                                                {
-                                                    let _ = tx
-                                                        .send(StreamUpdate::Reasoning(
-                                                            reasoning.to_string(),
-                                                        ))
-                                                        .await;
-                                                }
-                                                if let Some(ref tool_calls) = choice.delta.tool_calls {
-                                                    for tool_call in tool_calls {
-                                                        let _ = tx
-                                                            .send(StreamUpdate::ToolCall(
-                                                                tool_call.name.clone(),
-                                                                tool_call.arguments.clone(),
-                                                            ))
-                                                            .await;
-                                                    }
                                                 }
                                                 if choice.finish_reason.is_some() {
                                                     let _ = tx.send(StreamUpdate::Done).await;
